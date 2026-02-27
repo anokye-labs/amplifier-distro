@@ -26,7 +26,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -43,6 +43,7 @@ from amplifier_distro.server.apps.settings import (
     _get_enabled_features,
     detect_bridges,
 )
+from amplifier_distro.server.preflight import safe_overlay_mutation
 
 router = APIRouter()
 steps_router = APIRouter(prefix="/steps")
@@ -258,18 +259,24 @@ async def step_config(request: Request) -> dict[str, Any]:
 async def step_modules(req: ModulesData) -> dict[str, Any]:
     """Toggle features in the overlay bundle based on selected module IDs."""
     requested = set(req.modules)
-    for fid, feature in FEATURES.items():
-        if fid in requested:
-            # Enable: add dependencies first, then feature includes
-            for dep_id in feature.requires:
-                dep = FEATURES[dep_id]
-                for inc in dep.includes:
-                    overlay.add_include(inc)
-            for inc in feature.includes:
-                overlay.add_include(inc)
-        else:
-            for inc in feature.includes:
-                overlay.remove_include(inc)
+    try:
+        async with safe_overlay_mutation():
+            for fid, feature in FEATURES.items():
+                if fid in requested:
+                    # Enable: add dependencies first, then feature includes
+                    for dep_id in feature.requires:
+                        dep = FEATURES[dep_id]
+                        for inc in dep.includes:
+                            overlay.add_include(inc)
+                    for inc in feature.includes:
+                        overlay.add_include(inc)
+                else:
+                    for inc in feature.includes:
+                        overlay.remove_include(inc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"status": "ok", "enabled": req.modules}
 
 
@@ -339,23 +346,32 @@ async def step_provider(req: ProviderData) -> dict[str, Any]:
     - **Sync** (from "Next" button): both empty — auto-register all
       providers that have keys but aren't fully configured.
     """
-    if req.api_key.strip() or req.provider:
-        return handle_provider_request(provider=req.provider, api_key=req.api_key)
-
-    # Sync mode (from "Next" button) - auto-register incomplete providers
-    synced = sync_providers()
-    return {
-        "status": "ok",
-        "synced": [
-            {
-                "provider": r.provider_id,
-                "provider_name": r.provider_name,
-                "ok": r.ok,
-                "overlay_error": r.overlay_error,
-            }
-            for r in synced
-        ],
-    }
+    try:
+        async with safe_overlay_mutation():
+            if req.api_key.strip() or req.provider:
+                result = handle_provider_request(
+                    provider=req.provider, api_key=req.api_key
+                )
+            else:
+                # Sync mode - auto-register incomplete providers
+                synced = sync_providers()
+                result = {
+                    "status": "ok",
+                    "synced": [
+                        {
+                            "provider": r.provider_id,
+                            "provider_name": r.provider_name,
+                            "ok": r.ok,
+                            "overlay_error": r.overlay_error,
+                        }
+                        for r in synced
+                    ],
+                }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
 
 
 @steps_router.post("/verify")

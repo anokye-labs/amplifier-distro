@@ -113,6 +113,12 @@ class DistroServer:
         from amplifier_distro.server.services import stop_services
 
         self._app.add_event_handler("shutdown", stop_services)
+
+        # Run bundle preflight at startup (validates overlay if configured)
+        from amplifier_distro.server.preflight import run_startup_preflight
+
+        self._app.add_event_handler("startup", run_startup_preflight)
+
         self._app.include_router(self._core_router)
 
     @property

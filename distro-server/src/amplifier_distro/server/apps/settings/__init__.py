@@ -39,6 +39,7 @@ from amplifier_distro.features import (
     provider_bundle_uri,
 )
 from amplifier_distro.server.app import AppManifest
+from amplifier_distro.server.preflight import safe_overlay_mutation
 
 # Bridge env-var / keys.env lookups used by detect_bridges()
 _BRIDGE_DEFS: dict[str, dict[str, Any]] = {
@@ -328,17 +329,23 @@ async def toggle_feature(req: FeatureToggle) -> dict[str, Any]:
         )
 
     feature = FEATURES[req.feature_id]
-    if req.enabled:
-        # Add dependencies first
-        for req_id in feature.requires:
-            dep = FEATURES[req_id]
-            for inc in dep.includes:
-                overlay.add_include(inc)
-        for inc in feature.includes:
-            overlay.add_include(inc)
-    else:
-        for inc in feature.includes:
-            overlay.remove_include(inc)
+    try:
+        async with safe_overlay_mutation():
+            if req.enabled:
+                # Add dependencies first
+                for req_id in feature.requires:
+                    dep = FEATURES[req_id]
+                    for inc in dep.includes:
+                        overlay.add_include(inc)
+                for inc in feature.includes:
+                    overlay.add_include(inc)
+            else:
+                for inc in feature.includes:
+                    overlay.remove_include(inc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return _build_status()
 
@@ -350,15 +357,21 @@ async def set_tier(req: TierRequest) -> dict[str, Any]:
 
     needed = features_for_tier(req.tier)
     current = set(_get_enabled_features())
-    for fid in needed:
-        if fid not in current:
-            feature = FEATURES[fid]
-            for dep_id in feature.requires:
-                dep = FEATURES[dep_id]
-                for inc in dep.includes:
-                    overlay.add_include(inc)
-            for inc in feature.includes:
-                overlay.add_include(inc)
+    try:
+        async with safe_overlay_mutation():
+            for fid in needed:
+                if fid not in current:
+                    feature = FEATURES[fid]
+                    for dep_id in feature.requires:
+                        dep = FEATURES[dep_id]
+                        for inc in dep.includes:
+                            overlay.add_include(inc)
+                    for inc in feature.includes:
+                        overlay.add_include(inc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return _build_status()
 
@@ -378,9 +391,15 @@ async def change_provider(req: ProviderRequest) -> dict[str, Any]:
     - **Use existing key**: ``provider`` set, no ``api_key`` — look up key
       from environment or keys.env and register.
     """
-    result = handle_provider_request(provider=req.provider, api_key=req.api_key)
-    if result["status"] == "error":
-        raise HTTPException(status_code=400, detail=str(result["detail"]))
+    try:
+        async with safe_overlay_mutation():
+            result = handle_provider_request(provider=req.provider, api_key=req.api_key)
+            if result["status"] == "error":
+                raise HTTPException(status_code=400, detail=str(result["detail"]))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result
 
 

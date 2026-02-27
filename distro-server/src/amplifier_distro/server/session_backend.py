@@ -333,7 +333,7 @@ class FoundationBackend:
         from amplifier_distro.overlay import overlay_dir, overlay_exists
 
         if overlay_exists():
-            bundle = await load_bundle(str(overlay_dir()))
+            bundle = await load_bundle(str(overlay_dir()), strict=True)
         else:
             name = bundle_name or self._bundle_name
             bundle = await load_bundle(name)
@@ -550,7 +550,6 @@ class FoundationBackend:
                 "description": description,
             },
         )
-
 
         # Wire streaming/display/approval when event_queue provided
         if event_queue is not None:

@@ -74,7 +74,7 @@ def get_includes(data: dict[str, Any] | None = None) -> list[str]:
 
 
 def ensure_overlay(provider: Provider) -> Path:
-    """Create (or update) the overlay bundle with include to maintained bundle + a provider.
+    """Create or update the overlay with the distro bundle + a provider.
 
     If the overlay already exists, the provider include is added only if
     not already present.  The distro bundle include is always ensured.
@@ -139,3 +139,29 @@ def remove_include(uri: str) -> None:
         if (entry.get("bundle") if isinstance(entry, dict) else entry) != uri
     ]
     _write_overlay(data)
+
+
+def snapshot_overlay() -> str | None:
+    """Capture current overlay content for rollback.
+
+    Returns the raw text of ``bundle.yaml``, or ``None`` if no overlay
+    exists yet.
+    """
+    path = overlay_bundle_path()
+    if not path.exists():
+        return None
+    return path.read_text()
+
+
+def restore_overlay(snapshot: str | None) -> None:
+    """Restore overlay from a previous snapshot.
+
+    If *snapshot* is ``None`` the overlay file is removed (reverting to
+    the "no overlay" state).
+    """
+    path = overlay_bundle_path()
+    if snapshot is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(snapshot)
