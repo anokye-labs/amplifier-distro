@@ -2374,6 +2374,7 @@ class TestAiohttpSessionCleanup:
 
         mock_ws = MagicMock()
         mock_ws.closed = False
+        mock_ws.close = AsyncMock()
         mock_session = MagicMock()
         mock_session.ws_connect = AsyncMock(return_value=mock_ws)
 
