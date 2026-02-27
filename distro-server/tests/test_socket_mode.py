@@ -105,3 +105,37 @@ class TestSocketModeStop:
         # All tasks should be cancelled/done
         for task in adapter._pending_tasks:
             assert task.done() or task.cancelled()
+
+
+class TestSocketModeExternalSession:
+    """Verify _close_ws does NOT close an externally-injected session."""
+
+    async def test_close_ws_skips_external_session(self):
+        """_close_ws must not call close() on an externally-owned session.
+
+        When SocketModeAdapter is constructed with ``session=``, the caller
+        owns the session lifetime.  _close_ws must leave it open.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        import aiohttp
+
+        from amplifier_distro.server.apps.slack.socket_mode import SocketModeAdapter
+
+        external_session = MagicMock(spec=aiohttp.ClientSession)
+        external_session.closed = False
+        external_session.close = AsyncMock()
+
+        config = MagicMock()
+        event_handler = MagicMock()
+        event_handler.handle_event_payload = AsyncMock(return_value={"ok": True})
+
+        adapter = SocketModeAdapter(config, event_handler, session=external_session)
+        # Simulate the state after _connection_loop picked up the external session
+        adapter._session = external_session
+        adapter._ws = None  # No WebSocket to close
+
+        await adapter._close_ws()
+
+        external_session.close.assert_not_called()
+        assert adapter._session is None  # stale reference must still be cleared

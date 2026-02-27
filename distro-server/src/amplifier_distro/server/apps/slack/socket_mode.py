@@ -133,11 +133,11 @@ class SocketModeAdapter:
                 logger.info("Connecting to Slack Socket Mode WebSocket...")
 
                 if self._external_session is not None:
-                    session = self._external_session
+                    _ws_session = self._external_session
                 else:
-                    session = aiohttp.ClientSession()
-                self._session = session
-                self._ws = await session.ws_connect(url)
+                    _ws_session = aiohttp.ClientSession()
+                self._session = _ws_session
+                self._ws = await _ws_session.ws_connect(url)
                 logger.info("WebSocket connected")
 
                 # Reset backoff on successful connection
