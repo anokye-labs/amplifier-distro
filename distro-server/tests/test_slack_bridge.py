@@ -2304,14 +2304,6 @@ class TestAiohttpSessionCleanup:
         assert slack_app._slack_aiohttp_session is None
         return slack_app
 
-    def _fresh_module(self):
-        """Return the slack app module with state cleared (no initialization)."""
-        import amplifier_distro.server.apps.slack as slack_app
-        from amplifier_distro.server.apps.slack import _state
-
-        _state.clear()
-        return slack_app
-
     # ------------------------------------------------------------------
     # on_shutdown() session-lifecycle tests
     # ------------------------------------------------------------------
@@ -2348,6 +2340,7 @@ class TestAiohttpSessionCleanup:
         await slack_app.on_shutdown()
 
         mock_session.close.assert_not_called()
+        assert slack_app._slack_aiohttp_session is None
 
     async def test_on_shutdown_with_no_session_does_not_crash(self):
         """on_shutdown() must not crash when _slack_aiohttp_session is None."""
@@ -2393,9 +2386,7 @@ class TestAiohttpSessionCleanup:
         with (
             patch.object(adapter, "_get_ws_url", AsyncMock(return_value="wss://fake")),
             patch.object(adapter, "_process_frames", _stop_after_one_frame),
-            patch.object(
-                adapter, "_resolve_bot_id", AsyncMock(return_value="U_BOT")
-            ),
+            patch.object(adapter, "_resolve_bot_id", AsyncMock(return_value="U_BOT")),
         ):
             adapter._running = True
             await adapter._connection_loop()
