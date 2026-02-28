@@ -49,6 +49,9 @@ router = APIRouter()
 _state: dict[str, Any] = {}
 _state_lock = threading.Lock()
 
+# Module-level aiohttp session for Socket Mode; managed by on_shutdown().
+_slack_aiohttp_session: Any = None
+
 
 def _get_state() -> dict[str, Any]:
     """Get the initialized bridge state."""
@@ -167,6 +170,8 @@ async def on_startup() -> None:
 
 async def on_shutdown() -> None:
     """Clean up the Slack bridge on server shutdown."""
+    global _slack_aiohttp_session
+
     with _state_lock:
         socket_adapter = _state.get("socket_adapter")
         session_manager = _state.get("session_manager")
@@ -183,6 +188,11 @@ async def on_shutdown() -> None:
                 await backend.end_session(mapping.session_id)
             except (RuntimeError, ValueError, ConnectionError, OSError):
                 logger.exception(f"Error ending session {mapping.session_id}")
+
+    # Close the module-level aiohttp session if open
+    if _slack_aiohttp_session is not None and not _slack_aiohttp_session.closed:
+        await _slack_aiohttp_session.close()
+    _slack_aiohttp_session = None
 
     with _state_lock:
         _state.clear()
