@@ -160,7 +160,7 @@ async def on_startup() -> None:
             await adapter.start()
             logger.info("Socket Mode connection started")
         except ImportError:
-            logger.error(
+            logger.warning(
                 "Socket Mode requires optional dependencies: "
                 "uv pip install amplifier-distro[slack]  (aiohttp missing)"
             )
