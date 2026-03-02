@@ -49,7 +49,7 @@ def main() -> None:
 
 @main.command("serve")
 @click.option(
-    "--host", default="127.0.0.1", help="Bind host (use 0.0.0.0 for LAN/Tailscale)"
+    "--host", default="0.0.0.0", help="Bind host (use 127.0.0.1 to restrict to localhost)"
 )
 @click.option(
     "--port", default=conventions.SERVER_DEFAULT_PORT, type=int, help="Bind port"
@@ -275,7 +275,7 @@ def service_cmd_status() -> None:
 
 
 @main.command("watchdog", hidden=True)
-@click.option("--host", default="127.0.0.1", help="Bind host")
+@click.option("--host", default="0.0.0.0", help="Bind host")
 @click.option(
     "--port",
     default=conventions.SERVER_DEFAULT_PORT,

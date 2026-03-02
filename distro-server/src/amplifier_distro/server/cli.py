@@ -25,8 +25,8 @@ from amplifier_distro import conventions
 @click.group("amp-distro-serve", invoke_without_command=True)
 @click.option(
     "--host",
-    default="127.0.0.1",
-    help="Bind host (use 0.0.0.0 for LAN/Tailscale)",
+    default="0.0.0.0",
+    help="Bind host (use 127.0.0.1 to restrict to localhost)",
 )
 @click.option(
     "--port",
@@ -76,8 +76,8 @@ def serve(
 @serve.command()
 @click.option(
     "--host",
-    default="127.0.0.1",
-    help="Bind host (use 0.0.0.0 for LAN/Tailscale)",
+    default="0.0.0.0",
+    help="Bind host (use 127.0.0.1 to restrict to localhost)",
 )
 @click.option(
     "--port",
@@ -153,8 +153,8 @@ def stop() -> None:
 @serve.command()
 @click.option(
     "--host",
-    default="127.0.0.1",
-    help="Bind host (use 0.0.0.0 for LAN/Tailscale)",
+    default="0.0.0.0",
+    help="Bind host (use 127.0.0.1 to restrict to localhost)",
 )
 @click.option(
     "--port",
@@ -237,7 +237,7 @@ def watchdog_group(ctx: click.Context) -> None:
 @watchdog_group.command("start")
 @click.option(
     "--host",
-    default="127.0.0.1",
+    default="0.0.0.0",
     help="Server host to monitor",
 )
 @click.option(

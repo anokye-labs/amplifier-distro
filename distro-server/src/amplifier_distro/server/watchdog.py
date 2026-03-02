@@ -120,7 +120,7 @@ def _signal_handler(signum: int, frame: object) -> None:
 
 def run_watchdog_loop(
     *,
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = conventions.SERVER_DEFAULT_PORT,
     check_interval: int = 30,
     restart_after: int = 300,
@@ -289,7 +289,7 @@ def _restart_server(
 
 def start_watchdog(
     *,
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = conventions.SERVER_DEFAULT_PORT,
     check_interval: int = 30,
     restart_after: int = 300,
@@ -374,7 +374,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Amplifier Distro Server Watchdog")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=conventions.SERVER_DEFAULT_PORT)
     parser.add_argument("--check-interval", type=int, default=30)
     parser.add_argument("--restart-after", type=int, default=300)

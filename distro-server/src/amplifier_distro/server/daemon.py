@@ -90,7 +90,7 @@ def is_port_in_use(host: str, port: int) -> bool:
 
 
 def wait_for_health(
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = conventions.SERVER_DEFAULT_PORT,
     timeout: float = 15.0,
     interval: float = 0.5,
@@ -119,7 +119,7 @@ def wait_for_health(
 
 
 def daemonize(
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = conventions.SERVER_DEFAULT_PORT,
     apps_dir: str | None = None,
     dev: bool = False,
