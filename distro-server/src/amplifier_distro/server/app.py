@@ -95,7 +95,7 @@ class DistroServer:
         title: str = "Amplifier Distro",
         version: str = "0.1.0",
         dev_mode: bool = False,
-        host: str = "127.0.0.1",
+        host: str = "0.0.0.0",
     ) -> None:
         self._apps: dict[str, AppManifest] = {}
         self._dev_mode = dev_mode
