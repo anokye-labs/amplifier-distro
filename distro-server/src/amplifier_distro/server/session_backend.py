@@ -15,6 +15,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -56,6 +58,7 @@ class _SessionHandle:
     session: Any  # AmplifierSession from foundation
     _cleanup_done: bool = field(default=False, repr=False)
     prepared: Any = field(default=None, repr=False)
+    hook_unregister: Callable[[], None] | None = field(default=None, repr=False)
 
     async def run(self, prompt: str) -> str:
         """Execute a prompt and return the response text."""
@@ -86,7 +89,10 @@ class _SessionHandle:
         request_cancel = getattr(coordinator, "request_cancel", None)
         if request_cancel is not None:
             try:
-                request_cancel(level)
+                if asyncio.iscoroutinefunction(request_cancel):
+                    await request_cancel(level)
+                else:
+                    request_cancel(level)
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Error requesting cancel (level=%s)", level, exc_info=True
@@ -341,12 +347,16 @@ class FoundationBackend:
 
     def _wire_event_queue(
         self, session: Any, session_id: str, event_queue: asyncio.Queue
-    ) -> None:
+    ) -> Callable[[], None]:
         """Wire streaming, display, and approval closures to an event queue.
 
         Called from create_session() and resume_session() when event_queue
         is provided. All three closures push (event_name, data) tuples
         to the same queue.
+
+        Returns an unregister callable that removes all registered hooks and
+        removes the session from _wired_sessions, so the next call (on
+        reconnect) re-registers fresh hooks against the new queue.
 
         Guards against double hook registration on page refresh / resume:
         hooks are only registered once per session; subsequent calls update
@@ -362,7 +372,8 @@ class FoundationBackend:
 
         if session_id in self._wired_sessions:
             # Already wired — update approval system only (new queue connection).
-            # Don't re-register hooks.
+            # Don't re-register hooks; return the existing unregister callable
+            # so the caller can still clean up when it's done.
             def _on_approval_request_rewire(
                 request_id: str,
                 prompt: str,
@@ -393,7 +404,10 @@ class FoundationBackend:
             if hasattr(coordinator, "set"):
                 coordinator.set("approval", approval)
             self._approval_systems[session_id] = approval
-            return
+            existing = self._sessions.get(session_id)
+            if existing and existing.hook_unregister:
+                return existing.hook_unregister
+            return lambda: None
 
         self._wired_sessions.add(session_id)
 
@@ -411,12 +425,14 @@ class FoundationBackend:
             return HookResult(action="continue", data=data)
 
         hooks = coordinator.hooks
+        _registered_hooks: list[tuple[str, Any]] = []
 
         registered = 0
         failed_evts = []
         for evt in ALL_EVENTS:
             try:
                 hooks.register(evt, on_stream)
+                _registered_hooks.append((evt, on_stream))
                 registered += 1
             except Exception as exc:  # noqa: BLE001
                 failed_evts.append((evt, exc))
@@ -430,6 +446,7 @@ class FoundationBackend:
         ]:
             try:
                 hooks.register(evt, on_stream)
+                _registered_hooks.append((evt, on_stream))
                 registered += 1
             except Exception as exc:  # noqa: BLE001
                 failed_evts.append((evt, exc))
@@ -447,6 +464,9 @@ class FoundationBackend:
         try:
             hooks.register(
                 "orchestrator:complete", on_orchestrator_complete, priority=50
+            )
+            _registered_hooks.append(
+                ("orchestrator:complete", on_orchestrator_complete)
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to register prompt:complete bridge: %s", exc)
@@ -498,12 +518,25 @@ class FoundationBackend:
             coordinator.set("approval", approval)
         self._approval_systems[session_id] = approval
 
+        # Build and return the unregister callable.  Calling it removes all
+        # registered hooks from the coordinator and evicts the session from
+        # _wired_sessions so the next _wire_event_queue call re-registers
+        # fresh hooks against the new queue (critical for correct reconnect).
+        def _unregister() -> None:
+            for evt, fn in _registered_hooks:
+                with contextlib.suppress(Exception):
+                    hooks.unregister(evt, fn)
+            self._wired_sessions.discard(session_id)
+
+        return _unregister
+
     async def create_session(
         self,
         working_dir: str = "~",
         bundle_name: str | None = None,
         description: str = "",
         event_queue: asyncio.Queue | None = None,
+        exclude_tools: list[str] | None = None,
     ) -> SessionInfo:
         wd = Path(working_dir).expanduser()
 
@@ -553,10 +586,12 @@ class FoundationBackend:
 
         # Wire streaming/display/approval when event_queue provided
         if event_queue is not None:
-            self._wire_event_queue(session, session_id, event_queue)
+            handle.hook_unregister = self._wire_event_queue(
+                session, session_id, event_queue
+            )
 
         # Register session spawning capability
-        register_spawning(session, prepared, session_id)
+        register_spawning(session, prepared, session_id, exclude_tools=exclude_tools)
 
         # Pre-start the session worker so the first message doesn't pay
         # the task-creation overhead
@@ -702,6 +737,13 @@ class FoundationBackend:
 
             # 3. Create a fresh session with the same bundle
             wd = Path(working_dir).expanduser()
+            # CWD safety guard: BundleRegistry.__init__ calls os.getcwd() which
+            # raises FileNotFoundError if the process CWD was deleted (e.g. in
+            # container or temp-dir environments). Silently recover by moving to ~.
+            try:
+                os.getcwd()
+            except FileNotFoundError:
+                os.chdir(os.path.expanduser("~"))
             prepared = await self._load_bundle()
             session = await prepared.create_session(
                 session_id=session_id,
@@ -897,6 +939,16 @@ class FoundationBackend:
             working_dir=str(handle.working_dir),
         )
 
+    def get_hook_unregister(self, session_id: str) -> Callable[[], None] | None:
+        """Return the hook unregister callable for a session, if one was wired.
+
+        Called by VoiceConnection.create() so it can store the callable and
+        invoke it in _cleanup_hook() on disconnect, ensuring hooks are properly
+        removed before the next reconnect re-registers fresh ones.
+        """
+        handle = self._sessions.get(session_id)
+        return handle.hook_unregister if handle else None
+
     def get_session_config(self, session_id: str) -> dict[str, Any] | None:
         """Return the mount-plan config dict for a live session."""
         handle = self._sessions.get(session_id)
@@ -930,7 +982,9 @@ class FoundationBackend:
         if event_queue is not None:
             handle = self._sessions.get(session_id)
             if handle is not None:
-                self._wire_event_queue(handle.session, session_id, event_queue)
+                handle.hook_unregister = self._wire_event_queue(
+                    handle.session, session_id, event_queue
+                )
 
             # Ensure worker queue + task exist after resume
             if session_id not in self._session_queues:
