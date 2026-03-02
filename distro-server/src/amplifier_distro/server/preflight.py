@@ -27,7 +27,6 @@ from pathlib import Path
 import yaml
 
 from amplifier_distro.overlay import (
-    migrate_overlay,
     overlay_bundle_path,
     overlay_dir,
     restore_overlay,
@@ -135,7 +134,6 @@ async def run_startup_preflight() -> None:
     try:
         async with OVERLAY_LOCK:
             logger.info("Running startup bundle preflight...")
-            migrate_overlay()
             preflight_lightweight(overlay_bundle_path())
             await preflight_full(overlay_dir())
             logger.info("Startup bundle preflight passed")
