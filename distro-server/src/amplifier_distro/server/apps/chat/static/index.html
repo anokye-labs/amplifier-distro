@@ -1145,6 +1145,32 @@
     return { text: JSON.stringify(result, null, 2) };
   }
 
+  // --- Pin API helpers ---
+  async function fetchPinnedSessions() {
+    try {
+      const resp = await fetch('/apps/chat/api/sessions/pins');
+      if (!resp.ok) return new Set();
+      const data = await resp.json();
+      return new Set(data.pinned || []);
+    } catch { return new Set(); }
+  }
+
+  async function apiPinSession(sessionId) {
+    try {
+      await fetch('/apps/chat/api/sessions/' + encodeURIComponent(sessionId) + '/pin', {
+        method: 'POST',
+      });
+    } catch (e) { console.error('Failed to pin session:', e); }
+  }
+
+  async function apiUnpinSession(sessionId) {
+    try {
+      await fetch('/apps/chat/api/sessions/' + encodeURIComponent(sessionId) + '/pin', {
+        method: 'DELETE',
+      });
+    } catch (e) { console.error('Failed to unpin session:', e); }
+  }
+
   function makeId() {
     return Math.random().toString(36).slice(2, 10);
   }
@@ -2185,6 +2211,7 @@
     const [showSessionFilter, setShowSessionFilter] = useState(false);
     const [collapsedDirGroups, setCollapsedDirGroups] = useState({});
     const [collapsedSpawnGroups, setCollapsedSpawnGroups] = useState({});
+    const [pinnedSessionIds, setPinnedSessionIds] = useState(new Set());
     const [sessionPanelWidth, setSessionPanelWidth] = useState(300);
     const [activityPanelWidth, setActivityPanelWidth] = useState(460);
     const [draggingPane, setDraggingPane] = useState(null);
@@ -3102,6 +3129,8 @@
             return changed ? next : prev;
           });
           setPendingHistorySyncCount(0);
+          // Load pin state from server
+          fetchPinnedSessions().then(pinSet => setPinnedSessionIds(pinSet));
         })
         .catch(err => {
           console.warn('[chat] failed to load session history', err);
@@ -3111,6 +3140,20 @@
           setHistoryListLoading(false);
           if (!silent) setSyncingHistory(false);
         });
+    }, []);
+
+    const handleTogglePin = useCallback(async (sessionId, currentlyPinned) => {
+      if (currentlyPinned) {
+        await apiUnpinSession(sessionId);
+        setPinnedSessionIds(prev => {
+          const next = new Set(prev);
+          next.delete(sessionId);
+          return next;
+        });
+      } else {
+        await apiPinSession(sessionId);
+        setPinnedSessionIds(prev => new Set(prev).add(sessionId));
+      }
     }, []);
 
     useEffect(() => {
