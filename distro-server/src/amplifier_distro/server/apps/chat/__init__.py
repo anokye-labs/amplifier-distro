@@ -203,11 +203,14 @@ async def list_session_history(
 ) -> dict:
     """Return lightweight metadata for all sessions discovered on disk."""
     sessions = await asyncio.to_thread(scan_sessions)
+    pinned_ids = await asyncio.to_thread(load_pins)
     sessions = [
         row
         for row in sessions
         if (row.get("message_count") or 0) > 0 or row.get("last_user_message")
     ]
+    for row in sessions:
+        row["pinned"] = row["session_id"] in pinned_ids
     return {"sessions": sessions[:limit]}
 
 

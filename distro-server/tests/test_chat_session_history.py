@@ -483,3 +483,22 @@ class TestPinEndpoints:
     def test_unpin_nonexistent_is_noop(self, chat_client: TestClient) -> None:
         resp = chat_client.delete("/apps/chat/api/sessions/nonexistent/pin")
         assert resp.status_code == 200
+
+    def test_history_includes_pinned_true(self, chat_client: TestClient, tmp_path: Path) -> None:
+        _make_session(tmp_path, "-Users-test-project", "session-xyz", [
+            {"role": "user", "content": "hello"},
+        ])
+        chat_client.post("/apps/chat/api/sessions/session-xyz/pin")
+        resp = chat_client.get("/apps/chat/api/sessions/history")
+        sessions = resp.json()["sessions"]
+        pinned_session = next(s for s in sessions if s["session_id"] == "session-xyz")
+        assert pinned_session["pinned"] is True
+
+    def test_history_unpinned_has_pinned_false(self, chat_client: TestClient, tmp_path: Path) -> None:
+        _make_session(tmp_path, "-Users-test-project", "session-xyz", [
+            {"role": "user", "content": "hello"},
+        ])
+        resp = chat_client.get("/apps/chat/api/sessions/history")
+        sessions = resp.json()["sessions"]
+        session = next(s for s in sessions if s["session_id"] == "session-xyz")
+        assert session["pinned"] is False
