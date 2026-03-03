@@ -24,6 +24,11 @@
       --status-connected: var(--accent-green);
       --status-connecting: var(--accent-amber);
       --status-disconnected: var(--accent-red);
+      --action-btn-bg: rgba(255, 255, 255, 0.06);
+      --action-btn-bg-hover: rgba(255, 255, 255, 0.10);
+      --action-btn-bg-active: rgba(255, 255, 255, 0.15);
+      --action-btn-color: #b0b0b0;
+      --action-btn-color-hover: #e8e8e8;
     }
 
     body[data-theme="light"] {
@@ -39,6 +44,11 @@
       --accent-green: #16a34a;
       --accent-amber: #d97706;
       --accent-red: #dc2626;
+      --action-btn-bg: rgba(0, 0, 0, 0.05);
+      --action-btn-bg-hover: rgba(0, 0, 0, 0.08);
+      --action-btn-bg-active: rgba(0, 0, 0, 0.12);
+      --action-btn-color: #64748b;
+      --action-btn-color-hover: #0f172a;
     }
 
     body {
@@ -1082,12 +1092,12 @@
     /* Overflow menu trigger and pin icon */
     .session-card-actions {
       position: absolute;
-      top: 2px;
-      right: 2px;
+      top: 4px;
+      right: 4px;
       display: flex;
-      gap: 0;
+      gap: 2px;
       opacity: 0;
-      transition: opacity 0.12s;
+      transition: opacity 0.15s ease-out;
     }
     .session-card:hover .session-card-actions,
     .session-card-actions:focus-within,
@@ -1095,29 +1105,51 @@
       opacity: 1;
     }
     @media (hover: none), (pointer: coarse) {
-      .session-card-actions { opacity: 0.7; }
+      .session-card-actions { opacity: 1; }
     }
     .session-card-action-btn {
+      position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
+      padding: 0;
       border: none;
-      background: none;
-      color: var(--text-secondary);
+      background: var(--action-btn-bg);
+      color: var(--action-btn-color);
       cursor: pointer;
-      border-radius: 4px;
-      padding: 6px;
-      box-sizing: content-box;
+      border-radius: 6px;
+      box-sizing: border-box;
+      transition: background 0.1s ease-out, color 0.1s ease-out;
+      -webkit-tap-highlight-color: transparent;
     }
     .session-card-action-btn .icon {
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
     }
     .session-card-action-btn:hover {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
+      background: var(--action-btn-bg-hover);
+      color: var(--action-btn-color-hover);
+    }
+    .session-card-action-btn:active {
+      background: var(--action-btn-bg-active);
+    }
+    .session-card-action-btn:focus-visible {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 1px;
+    }
+    @media (pointer: coarse) {
+      .session-card-action-btn::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 44px;
+        height: 44px;
+      }
     }
     /* Dropdown */
     .session-overflow-menu {
@@ -1152,6 +1184,35 @@
     }
     /* Ensure session-card is position relative */
     .session-card { position: relative; }
+    /* Always-visible pin indicator on pinned cards */
+    .session-pin-indicator {
+      position: absolute;
+      top: 4px;
+      right: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--action-btn-color);
+      cursor: pointer;
+      border-radius: 6px;
+      box-sizing: border-box;
+      transition: background 0.1s ease-out, color 0.1s ease-out;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .session-pin-indicator .icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+    .session-pin-indicator:hover {
+      background: var(--action-btn-bg-hover);
+      color: var(--action-btn-color-hover);
+    }
     /* Pin animation tokens */
     :root {
       --pin-duration-icon: 150ms;
@@ -2080,12 +2141,12 @@
               </span>`
           }
         </div>
+        ${isPinned && html`
+          <button class="session-pin-indicator" title="Unpin" aria-label="Unpin session"
+            onClick=${(e) => { e.stopPropagation(); onTogglePin(session.sessionId, true); }}
+          ><${Icon} name="pin" /></button>
+        `}
         <div class=${'session-card-actions' + (menuOpen ? ' menu-open' : '')}>
-          ${isPinned && html`
-            <button class="session-card-action-btn" title="Unpin" aria-label="Unpin session"
-              onClick=${(e) => { e.stopPropagation(); onTogglePin(session.sessionId, true); }}
-            ><${Icon} name="pin" /></button>
-          `}
           <button class="session-card-action-btn" title="More actions" aria-label="Session actions"
             aria-haspopup="menu"
             onClick=${(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
