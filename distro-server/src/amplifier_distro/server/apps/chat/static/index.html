@@ -334,17 +334,7 @@
     .session-card-meta { font-size: 11px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; margin-top: 2px; }
     .session-card-name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
     .session-card-name-row .session-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .session-rename-trigger {
-      background: none; border: none; padding: 4px; margin: -4px; cursor: pointer;
-      color: var(--text-muted); opacity: 0; transition: opacity 0.15s;
-      display: inline-flex; align-items: center; justify-content: center;
-      min-width: 44px; min-height: 44px; flex-shrink: 0;
-    }
-    .session-card:hover .session-rename-trigger,
-    .session-card.active .session-rename-trigger,
-    .session-card:focus .session-rename-trigger,
-    .session-card:focus-within .session-rename-trigger { opacity: 1; }
-    .session-rename-trigger:hover { color: var(--accent-blue); }
+
     .session-name-input {
       font-size: 12px; font-weight: 500; color: var(--text-primary);
       background: transparent; border: none; border-bottom: 1px solid var(--accent-blue);
@@ -1910,7 +1900,7 @@
     `;
   }
 
-  function SessionOverflowMenu({ isPinned, onPin, onClose }) {
+  function SessionOverflowMenu({ isPinned, onPin, onRename, onClose }) {
     const menuRef = useRef(null);
     useEffect(() => {
       function handleClickOutside(e) {
@@ -1926,6 +1916,10 @@
           onClick=${(e) => { e.stopPropagation(); onPin(); onClose(); }}>
           ${isPinned ? 'Unpin' : 'Pin to top'}
         </button>
+        <button class="session-overflow-item" role="menuitem"
+          onClick=${(e) => { e.stopPropagation(); onRename(); onClose(); }}>
+          Rename
+        </button>
       </div>
     `;
   }
@@ -1939,7 +1933,6 @@
     const [menuOpen, setMenuOpen] = useState(false);
     const inputRef = useRef(null);
     const originalNameRef = useRef('');
-    const longPressTimerRef = useRef(null);
     const statusIcon =
       session.status === 'running' ? '⟳ ' :
       session.status === 'connecting' ? '◌ ' :
@@ -2042,33 +2035,7 @@
       }
     }, [isEditing, startEditing]);
 
-    const handleTouchStart = useCallback((e) => {
-      // Suppress native long-press behaviour (browser context menu, iOS text-selection
-      // handles) so our custom 500 ms handler is the only thing that fires.
-      e.preventDefault();
-      longPressTimerRef.current = setTimeout(() => {
-        longPressTimerRef.current = null;
-        startEditing(null);
-      }, 500);
-    }, [startEditing]);
-    const handleTouchEnd = useCallback(() => {
-      if (longPressTimerRef.current) {
-        // Short tap: cancel the long-press timer and manually fire the click
-        // action, because e.preventDefault() on touchstart stops the browser
-        // from synthesising a click event.
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-        if (!isEditing && onClick) onClick();
-      }
-    }, [isEditing, onClick]);
-    const handleTouchMove = useCallback(() => {
-      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-    }, []);
-    // Suppress the browser's native context menu on right-click / long-press
-    // (belt-and-suspenders alongside the touchstart preventDefault).
-    const handleContextMenu = useCallback((e) => {
-      e.preventDefault();
-    }, []);
+
 
     useEffect(() => {
       if (isEditing && inputRef.current) {
@@ -2078,7 +2045,7 @@
     }, [isEditing]);
 
     return html`
-      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} data-session-id=${session.sessionId} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} onContextMenu=${handleContextMenu} tabindex="0">
+      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} data-session-id=${session.sessionId} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} tabindex="0">
         <div class="session-card-name-row">
           <div class=${'session-card-name' + (!session.name ? ' auto-named' : '') + (shaking ? ' session-name-shake' : '')}>
             ${statusIcon}
@@ -2096,17 +2063,10 @@
               : html`${sessionName}${session.pendingApproval ? html`<${Icon} name="bell" className="sm" />` : ''}`
             }
           </div>
-          ${isEditing
-            ? html`<span class="session-edit-actions">
+          ${isEditing && html`<span class="session-edit-actions">
                 <button onClick=${(e) => { e.stopPropagation(); saveEdit(); }} title="Save">✓</button>
                 <button onClick=${(e) => { e.stopPropagation(); cancelEditing(); }} title="Cancel">✕</button>
               </span>`
-            : html`<button
-                class="session-rename-trigger"
-                onClick=${startEditing}
-                title="Rename session"
-                aria-label="Rename session"
-              >✏</button>`
           }
         </div>
         <div class=${'session-card-actions' + (menuOpen ? ' menu-open' : '')}>
@@ -2123,6 +2083,7 @@
             <${SessionOverflowMenu}
               isPinned=${isPinned}
               onPin=${() => onTogglePin(session.sessionId, isPinned)}
+              onRename=${(e) => startEditing(e)}
               onClose=${() => setMenuOpen(false)}
             />
           `}
