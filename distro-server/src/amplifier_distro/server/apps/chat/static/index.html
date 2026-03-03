@@ -1082,10 +1082,10 @@
     /* Overflow menu trigger and pin icon */
     .session-card-actions {
       position: absolute;
-      top: 6px;
-      right: 6px;
+      top: 2px;
+      right: 2px;
       display: flex;
-      gap: 2px;
+      gap: 0;
       opacity: 0;
       transition: opacity 0.12s;
     }
@@ -1101,17 +1101,19 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
-      min-width: 44px;
-      min-height: 44px;
+      width: 24px;
+      height: 24px;
       border: none;
       background: none;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       cursor: pointer;
       border-radius: 4px;
-      padding: 0;
-      font-size: 16px;
+      padding: 6px;
+      box-sizing: content-box;
+    }
+    .session-card-action-btn .icon {
+      width: 14px;
+      height: 14px;
     }
     .session-card-action-btn:hover {
       background: var(--bg-tertiary);
@@ -2082,12 +2084,12 @@
           ${isPinned && html`
             <button class="session-card-action-btn" title="Unpin" aria-label="Unpin session"
               onClick=${(e) => { e.stopPropagation(); onTogglePin(session.sessionId, true); }}
-            ><${Icon} name="pin" className="sm" /></button>
+            ><${Icon} name="pin" /></button>
           `}
           <button class="session-card-action-btn" title="More actions" aria-label="Session actions"
             aria-haspopup="menu"
             onClick=${(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-          ><${Icon} name="more-vertical" className="sm" /></button>
+          ><${Icon} name="more-vertical" /></button>
           ${menuOpen && html`
             <${SessionOverflowMenu}
               isPinned=${isPinned}
