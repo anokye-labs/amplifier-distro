@@ -924,6 +924,307 @@ class TestDoubleHookRegistrationGuard:
         assert len(bridge_backend._wired_sessions) == 0
 
 
+# ── FoundationBackend.list_tools / list_modes / set_mode ──────────────────
+
+
+class TestFoundationBackendListTools:
+    """Verify FoundationBackend.list_tools uses coordinator.get('tools')."""
+
+    def test_returns_tool_names_and_descriptions(self, bridge_backend):
+        """list_tools returns name+description from live mounted tool objects."""
+        mock_tool_bash = MagicMock()
+        mock_tool_bash.description = "Execute shell commands"
+        mock_tool_read = MagicMock()
+        mock_tool_read.description = "Read file contents"
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.get = MagicMock(
+            return_value={"bash": mock_tool_bash, "read_file": mock_tool_read}
+        )
+
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-tools-001")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-tools-001"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_tools(bridge_backend, "sess-tools-001")
+
+        assert result is not None
+        assert len(result) == 2
+        names = [t["name"] for t in result]
+        assert "bash" in names
+        assert "read_file" in names
+        descs = {t["name"]: t["description"] for t in result}
+        assert descs["bash"] == "Execute shell commands"
+        mock_coordinator.get.assert_called_with("tools")
+
+    def test_returns_none_for_unknown_session(self, bridge_backend):
+        """list_tools returns None when session doesn't exist."""
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_tools(bridge_backend, "no-such")
+        assert result is None
+
+    def test_returns_empty_list_when_no_tools(self, bridge_backend):
+        """list_tools returns [] when coordinator has no tools mounted."""
+        mock_coordinator = MagicMock()
+        mock_coordinator.get = MagicMock(return_value={})
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-tools-empty")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-tools-empty"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_tools(bridge_backend, "sess-tools-empty")
+        assert result == []
+
+    def test_handles_missing_description(self, bridge_backend):
+        """list_tools uses fallback when tool lacks .description."""
+        mock_tool = MagicMock(spec=[])  # no description attr
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.get = MagicMock(return_value={"weird_tool": mock_tool})
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-tools-nodesc")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-tools-nodesc"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_tools(bridge_backend, "sess-tools-nodesc")
+        assert result[0]["description"] == "No description"
+
+    def test_handles_none_session(self, bridge_backend):
+        """list_tools returns None when handle.session is None."""
+        handle = _make_mock_handle("sess-tools-none")
+        handle.session = None
+        bridge_backend._sessions["sess-tools-none"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_tools(bridge_backend, "sess-tools-none")
+        assert result is None
+
+
+class TestFoundationBackendListModes:
+    """Verify FoundationBackend.list_modes reads session_state defensively."""
+
+    def test_returns_modes_with_active(self, bridge_backend):
+        """list_modes returns mode list and active mode from session_state."""
+        mock_discovery = MagicMock()
+        mock_discovery.list_modes = MagicMock(
+            return_value=[
+                ("plan", "Planning mode", "modes-bundle"),
+                ("explore", "Exploration mode", "modes-bundle"),
+            ]
+        )
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.session_state = {
+            "active_mode": "plan",
+            "mode_discovery": mock_discovery,
+        }
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-modes-001")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-modes-001"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_modes(bridge_backend, "sess-modes-001")
+
+        assert result is not None
+        assert result["active_mode"] == "plan"
+        assert len(result["modes"]) == 2
+        assert result["modes"][0]["name"] == "plan"
+        assert result["modes"][1]["source"] == "modes-bundle"
+
+    def test_returns_empty_when_no_session_state(self, bridge_backend):
+        """list_modes degrades gracefully when session_state doesn't exist."""
+        mock_coordinator = MagicMock(spec=[])  # no session_state
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-modes-nostate")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-modes-nostate"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_modes(bridge_backend, "sess-modes-nostate")
+        assert result == {"active_mode": None, "modes": []}
+
+    def test_returns_empty_when_no_discovery(self, bridge_backend):
+        """list_modes degrades when mode_discovery not in session_state."""
+        mock_coordinator = MagicMock()
+        mock_coordinator.session_state = {"active_mode": None}
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-modes-nodisc")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-modes-nodisc"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_modes(bridge_backend, "sess-modes-nodisc")
+        assert result == {"active_mode": None, "modes": []}
+
+    def test_returns_none_for_unknown_session(self, bridge_backend):
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.list_modes(bridge_backend, "no-such")
+        assert result is None
+
+
+class TestFoundationBackendSetMode:
+    """Verify FoundationBackend.set_mode validates and mutates session_state."""
+
+    def test_activate_valid_mode(self, bridge_backend):
+        """set_mode activates a mode and calls reset_warnings."""
+        mock_mode_def = MagicMock()
+        mock_discovery = MagicMock()
+        mock_discovery.find = MagicMock(return_value=mock_mode_def)
+        mock_hooks = MagicMock()
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.session_state = {
+            "active_mode": None,
+            "mode_discovery": mock_discovery,
+            "mode_hooks": mock_hooks,
+        }
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-set-001")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-set-001"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.set_mode(bridge_backend, "sess-set-001", "plan")
+
+        assert result["active_mode"] == "plan"
+        assert result["previous_mode"] is None
+        assert mock_coordinator.session_state["active_mode"] == "plan"
+        mock_discovery.find.assert_called_once_with("plan")
+        mock_hooks.reset_warnings.assert_called_once()
+
+    def test_deactivate_mode(self, bridge_backend):
+        """set_mode(None) deactivates the current mode."""
+        mock_hooks = MagicMock()
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.session_state = {
+            "active_mode": "plan",
+            "mode_discovery": MagicMock(),
+            "mode_hooks": mock_hooks,
+        }
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-set-002")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-set-002"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.set_mode(bridge_backend, "sess-set-002", None)
+
+        assert result["active_mode"] is None
+        assert result["previous_mode"] == "plan"
+        assert mock_coordinator.session_state["active_mode"] is None
+        mock_hooks.reset_warnings.assert_called_once()
+
+    def test_rejects_invalid_mode_name(self, bridge_backend):
+        """set_mode returns error for non-existent mode with available list."""
+        mock_discovery = MagicMock()
+        mock_discovery.find = MagicMock(return_value=None)
+        mock_discovery.list_modes = MagicMock(
+            return_value=[("plan", "Plan", "s"), ("explore", "Explore", "s")]
+        )
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.session_state = {
+            "active_mode": None,
+            "mode_discovery": mock_discovery,
+            "mode_hooks": MagicMock(),
+        }
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-set-003")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-set-003"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.set_mode(bridge_backend, "sess-set-003", "bogus")
+
+        assert "error" in result
+        assert "bogus" in result["error"]
+        assert "plan" in result["available_modes"]
+        # active_mode should NOT have changed
+        assert mock_coordinator.session_state["active_mode"] is None
+
+    def test_error_when_no_session_state(self, bridge_backend):
+        """set_mode returns error when session_state doesn't exist."""
+        mock_coordinator = MagicMock(spec=[])  # no session_state
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-set-nostate")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-set-nostate"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.set_mode(bridge_backend, "sess-set-nostate", "plan")
+        assert "error" in result
+
+    def test_error_for_unknown_session(self, bridge_backend):
+        """set_mode returns error when session doesn't exist."""
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.set_mode(bridge_backend, "no-such", "plan")
+        assert "error" in result
+
+    def test_works_without_mode_hooks(self, bridge_backend):
+        """set_mode activates even when mode_hooks isn't in session_state."""
+        mock_mode_def = MagicMock()
+        mock_discovery = MagicMock()
+        mock_discovery.find = MagicMock(return_value=mock_mode_def)
+
+        mock_coordinator = MagicMock()
+        mock_coordinator.session_state = {
+            "active_mode": None,
+            "mode_discovery": mock_discovery,
+            # no mode_hooks key
+        }
+        mock_session = MagicMock()
+        mock_session.coordinator = mock_coordinator
+
+        handle = _make_mock_handle("sess-set-nohooks")
+        handle.session = mock_session
+        bridge_backend._sessions["sess-set-nohooks"] = handle
+
+        from amplifier_distro.server.session_backend import FoundationBackend
+
+        result = FoundationBackend.set_mode(bridge_backend, "sess-set-nohooks", "plan")
+        assert result["active_mode"] == "plan"
+
+
 class TestSessionBackendProtocol:
     def test_protocol_declares_resume_session(self):
         from amplifier_distro.server.session_backend import SessionBackend
