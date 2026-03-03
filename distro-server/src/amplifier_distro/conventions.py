@@ -29,7 +29,6 @@ DISTRO_SETTINGS_FILENAME = "settings.yaml"  # distro-layer config (inside DISTRO
 DISTRO_SESSIONS_DIR = f"{DISTRO_HOME}/sessions"  # server session directories
 DISTRO_SESSION_META_FILENAME = "meta.json"
 DISTRO_SESSION_LOG_FILENAME = "serve.log"
-DISTRO_SESSION_CURRENT_LINK = "current"  # symlink to active session
 
 # --- Local Overlay Bundle ---
 # The distro creates a local overlay bundle that includes the distro bundle.

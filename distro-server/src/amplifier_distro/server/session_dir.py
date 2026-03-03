@@ -77,21 +77,6 @@ def create_session_dir(
     meta_file = session_path / conventions.DISTRO_SESSION_META_FILENAME
     meta_file.write_text(json.dumps(meta, indent=2) + "\n")
 
-    # Update ``current`` symlink
-    current_link = sessions_root / conventions.DISTRO_SESSION_CURRENT_LINK
-    try:
-        # Atomic symlink update: create temp, then rename
-        tmp_link = sessions_root / f".current_tmp_{session_id}"
-        tmp_link.symlink_to(session_path.name)
-        tmp_link.rename(current_link)
-    except OSError:
-        # Non-atomic fallback (Windows or permission issues)
-        try:
-            current_link.unlink(missing_ok=True)
-            current_link.symlink_to(session_path.name)
-        except OSError:
-            logger.debug("Could not create 'current' symlink", exc_info=True)
-
     return session_id, session_path
 
 
