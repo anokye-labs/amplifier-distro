@@ -27,9 +27,9 @@ from amplifier_distro import conventions
 logger = logging.getLogger(__name__)
 
 
-def _short_id() -> str:
-    """Generate an 8-character hex session ID from a UUID4."""
-    return uuid.uuid4().hex[:8]
+def _session_id() -> str:
+    """Generate a UUID4 session ID."""
+    return str(uuid.uuid4())
 
 
 def _get_version() -> str:
@@ -56,7 +56,7 @@ def create_session_dir(
 
     Returns a (session_id, session_path) tuple.
     """
-    session_id = _short_id()
+    session_id = _session_id()
     sessions_root = Path(conventions.DISTRO_SESSIONS_DIR).expanduser()
     session_path = sessions_root / session_id
 
