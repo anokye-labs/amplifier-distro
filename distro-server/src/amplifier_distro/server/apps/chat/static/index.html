@@ -1298,6 +1298,67 @@
       return { html: '<pre>' + lines.join('\n') + '</pre>', cssClass: 'config-result' };
     }
 
+    // /tools — table of tool names + descriptions
+    if (command === 'tools' && result.type === 'tools') {
+      const lines = [h('Tools') + ' ' + d('(' + (result.tools || []).length + ')')];
+      for (const t of (result.tools || [])) {
+        const first = (t.description || '').split('\n')[0];
+        const desc = first.length > 60 ? first.slice(0, 57) + '...' : first;
+        lines.push('  ' + esc(t.name).padEnd(22) + d(esc(desc)));
+      }
+      return { html: '<pre>' + lines.join('\n') + '</pre>', cssClass: 'config-result' };
+    }
+
+    // /agents — table of agent names + descriptions
+    if (command === 'agents' && result.type === 'agents') {
+      const agents = result.agents || [];
+      if (!agents.length) return { text: 'No agents loaded' };
+      const lines = [h('Agents') + ' ' + d('(' + agents.length + ')')];
+      for (const a of agents) {
+        const first = (a.description || '').split('\n')[0];
+        const desc = first.length > 60 ? first.slice(0, 57) + '...' : first;
+        lines.push('  ' + esc(a.name).padEnd(22) + d(esc(desc)));
+      }
+      return { html: '<pre>' + lines.join('\n') + '</pre>', cssClass: 'config-result' };
+    }
+
+    // /modes — grouped list of available modes
+    if (command === 'modes' && result.type === 'modes') {
+      const modes = result.modes || [];
+      const active = result.active_mode;
+      if (!modes.length) return { text: 'No modes available' };
+      const lines = [h('Modes') + (active ? ' ' + d('active: ' + active) : '')];
+      // Group by source
+      const groups = {};
+      for (const m of modes) {
+        const src = m.source || 'unknown';
+        if (!groups[src]) groups[src] = [];
+        groups[src].push(m);
+      }
+      for (const [src, items] of Object.entries(groups)) {
+        lines.push('');
+        lines.push('  ' + d(esc(src)));
+        for (const m of items) {
+          const marker = m.name === active ? ' *' : '';
+          const desc = m.description ? '  ' + d(esc(m.description)) : '';
+          lines.push('    ' + esc(m.name) + marker + desc);
+        }
+      }
+      return { html: '<pre>' + lines.join('\n') + '</pre>', cssClass: 'config-result' };
+    }
+
+    // /mode — mode activation/deactivation result
+    if (command === 'mode' && result.type === 'mode') {
+      const active = result.active_mode;
+      const prev = result.previous_mode;
+      if (active) {
+        const msg = prev ? 'Switched from ' + prev + ' to ' + active : 'Mode activated: ' + active;
+        return { text: msg };
+      }
+      if (prev) return { text: 'Mode deactivated: ' + prev };
+      return { text: result.message || 'No mode active' };
+    }
+
     // Default: pretty-print JSON for other commands
     return { text: JSON.stringify(result, null, 2) };
   }
