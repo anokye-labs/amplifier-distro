@@ -7,9 +7,7 @@
 <script src="/apps/voice/static/vendor.js"></script>
 <script src="/apps/voice/static/connection-health.mjs"></script>
 <script src="/static/theme-init.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="/static/amplifier-theme.css">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
@@ -33,7 +31,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  animation: fadeIn 0.4s ease;
+  animation: fadeIn var(--duration-normal) var(--ease-out);
 }
 
 /* ------------------------------------------------------------------ */
@@ -44,19 +42,13 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 16px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--canvas-mist);
 }
 
 .app-title {
-  font-family: 'Monoton', cursive;
+  font-family: var(--font-heading);
   font-size: clamp(1.5rem, 4vw, 2.2rem);
-  color: var(--neon-secondary);
-  text-shadow:
-    0 0   5px var(--neon-secondary),
-    0 0  10px var(--neon-secondary),
-    0 0  20px var(--neon-primary),
-    0 0  40px var(--neon-primary),
-    0 0  80px var(--neon-primary);
+  color: var(--signal);
   letter-spacing: 0.05em;
 }
 
@@ -68,34 +60,34 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
-  border-radius: 20px;
+  border-radius: var(--radius-card);
   font-size: 13px;
   font-weight: 600;
   border: 1px solid transparent;
 }
 
 .status-badge.idle {
-  background: var(--border);
-  color: var(--text-muted);
-  border-color: var(--border);
+  background: var(--canvas-mist);
+  color: var(--ink-fog);
+  border-color: var(--canvas-mist);
 }
 
 .status-badge.connecting {
-  background: #2a2200;
+  background: var(--warning-soft);
   color: var(--warning);
-  border-color: #5a4000;
+  border-color: var(--warning);
 }
 
 .status-badge.connected {
-  background: #002a12;
+  background: var(--success-soft);
   color: var(--success);
-  border-color: #005025;
+  border-color: var(--success);
 }
 
 .status-badge.disconnected {
-  background: #2a0000;
+  background: var(--error-soft);
   color: var(--error);
-  border-color: #500000;
+  border-color: var(--error);
 }
 
 .status-dot {
@@ -118,9 +110,9 @@ body {
 /*  Error banner                                                       */
 /* ------------------------------------------------------------------ */
 .error-banner {
-  background: #2a0000;
-  border: 1px solid #500000;
-  border-radius: 8px;
+  background: var(--error-soft);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-input);
   padding: 12px 16px;
   color: var(--error);
   font-size: 14px;
@@ -137,9 +129,9 @@ body {
   min-height: 300px;
   max-height: 500px;
   overflow-y: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--canvas-warm);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -151,7 +143,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-disabled, var(--text-muted));
+  color: var(--text-disabled, var(--ink-fog));
   font-size: 14px;
   font-style: italic;
 }
@@ -174,29 +166,29 @@ body {
 
 .bubble-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--ink-fog);
   margin-bottom: 4px;
   text-transform: capitalize;
 }
 
 .bubble-text {
   padding: 10px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-button);
   font-size: 14px;
   line-height: 1.5;
   word-break: break-word;
 }
 
 .message-bubble.user .bubble-text {
-  background: var(--accent-hover);
+  background: var(--signal-light);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
 
 .message-bubble.assistant .bubble-text {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--canvas-stone);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
   border-bottom-left-radius: 4px;
 }
 
@@ -209,12 +201,12 @@ body {
 /* Divider between injected history and the live session */
 .history-divider {
   text-align: center;
-  color: var(--text-disabled, var(--text-muted));
+  color: var(--text-disabled, var(--ink-fog));
   font-size: 0.7rem;
   letter-spacing: 0.05em;
   padding: 6px 0;
   margin: 4px 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--canvas-mist);
 }
 
 /* ------------------------------------------------------------------ */
@@ -228,12 +220,12 @@ body {
 .btn {
   padding: 12px 24px;
   border: none;
-  border-radius: 8px;
-  font-family: var(--font);
+  border-radius: var(--radius-input);
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: opacity var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
   flex: 1;
 }
 
@@ -243,30 +235,31 @@ body {
 }
 
 .btn-start {
-  background: var(--accent);
+  background: var(--signal);
   color: #fff;
 }
 
 .btn-start:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--signal-light);
 }
 
 .btn-disconnect {
-  background: #dc2626;
+  background: var(--error);
   color: #fff;
 }
 
 .btn-disconnect:hover:not(:disabled) {
-  background: #b91c1c;
+  background: var(--error);
+  filter: brightness(0.9);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Pause-replies banner / muted badge  (Task 5.4)                    */
 /* ------------------------------------------------------------------ */
 .pause-banner {
-  background: #2a1800;
-  border: 1px solid #5a3800;
-  border-radius: 8px;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-input);
   padding: 10px 16px;
   color: var(--warning);
   font-size: 13px;
@@ -281,28 +274,28 @@ body {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-button);
   font-size: 12px;
   font-weight: 600;
-  background: #2a0000;
+  background: var(--error-soft);
   color: var(--error);
-  border: 1px solid #500000;
+  border: 1px solid var(--error);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Delegation Overlay  (delegation-feedback)                         */
 /* ------------------------------------------------------------------ */
 .delegation-overlay {
-  background: #0d1a2e;
-  border: 1px solid #1e3a5f;
-  border-radius: 8px;
+  background: var(--canvas-stone);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
   padding: 12px 16px;
-  color: #60a5fa;
+  color: var(--signal);
   font-size: 13px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  animation: fadeInOverlay 0.2s ease;
+  animation: fadeInOverlay var(--duration-fast) var(--ease-out);
 }
 @keyframes fadeInOverlay {
   from { opacity: 0; transform: translateY(-4px); }
@@ -318,7 +311,7 @@ body {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border: 2px solid #60a5fa;
+  border: 2px solid var(--signal);
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -335,13 +328,13 @@ body {
   padding-left: 18px;
 }
 .delegation-overlay-tool {
-  color: #93c5fd;
+  color: var(--signal-light);
   font-size: 12px;
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 .delegation-overlay-tool::before {
   content: '→ ';
-  color: #3b82f6;
+  color: var(--signal);
 }
 /* ------------------------------------------------------------------ */
 /*  Delegation Transcript Entry  (delegation-feedback)                */
@@ -352,27 +345,27 @@ body {
   align-items: flex-start;
 }
 .message-bubble.delegation .bubble-label {
-  color: #3b82f6;
+  color: var(--signal);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 .message-bubble.delegation .bubble-text {
-  background: #0d1a2e;
-  color: #93c5fd;
-  border: 1px solid #1e3a5f;
+  background: var(--canvas-stone);
+  color: var(--signal-light);
+  border: 1px solid var(--canvas-mist);
   border-bottom-left-radius: 4px;
   font-size: 13px;
   width: 100%;
   cursor: pointer;
 }
 .message-bubble.delegation .bubble-text:hover {
-  border-color: #3b82f6;
+  border-color: var(--signal);
 }
 .message-bubble.delegation.error .bubble-text {
-  background: #1a0e00;
-  border-color: #78350f;
-  color: #fbbf24;
+  background: var(--warning-soft);
+  border-color: var(--warning);
+  color: var(--warning);
 }
 .delegation-summary {
   display: flex;
@@ -390,7 +383,7 @@ body {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #60a5fa;
+  background: var(--signal);
   animation: dotPulse 1.2s ease-in-out infinite;
 }
 .delegation-dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -402,7 +395,7 @@ body {
 .delegation-tool-list {
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid #1e3a5f;
+  border-top: 1px solid var(--canvas-mist);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -410,20 +403,20 @@ body {
 .delegation-tool-item {
   font-size: 11px;
   font-family: 'SF Mono', 'Fira Code', monospace;
-  color: #60a5fa;
+  color: var(--signal);
 }
 .delegation-tool-item::before {
   content: '→ ';
-  color: #3b82f6;
+  color: var(--signal);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Connection Health Panel  (Task 5.5)                               */
 /* ------------------------------------------------------------------ */
 .health-panel {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
+  background: var(--canvas-warm);
   overflow: hidden;
 }
 
@@ -436,16 +429,16 @@ body {
   user-select: none;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg-primary);
+  color: var(--ink-slate);
+  background: var(--canvas);
   border: none;
   width: 100%;
   text-align: left;
 }
 
 .health-panel-header:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--canvas-stone);
+  color: var(--ink);
 }
 
 .health-panel-header-left {
@@ -466,11 +459,11 @@ body {
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
 }
 
 .health-label {
-  color: var(--text-muted);
+  color: var(--ink-fog);
   width: 130px;
   flex-shrink: 0;
 }
@@ -490,7 +483,7 @@ body {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-input);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -498,21 +491,21 @@ body {
 }
 
 .warning-badge.stale {
-  background: #2a1800;
+  background: var(--warning-soft);
   color: var(--warning);
-  border: 1px solid #5a3800;
+  border: 1px solid var(--warning);
 }
 
 .warning-badge.idle {
-  background: #1a1a2a;
-  color: #818cf8;
-  border: 1px solid #3730a3;
+  background: var(--signal-soft);
+  color: var(--signal);
+  border: 1px solid var(--signal);
 }
 
 .warning-badge.session_limit {
-  background: #2a0000;
+  background: var(--error-soft);
   color: var(--error);
-  border: 1px solid #500000;
+  border: 1px solid var(--error);
 }
 
 .health-strategy {
@@ -523,14 +516,14 @@ body {
 }
 
 .health-strategy label {
-  color: var(--text-muted);
+  color: var(--ink-fog);
 }
 
 .health-strategy select {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  background: var(--canvas-stone);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-subtle);
   padding: 4px 8px;
   font-size: 13px;
   cursor: pointer;
@@ -540,9 +533,9 @@ body {
 /*  Session Picker  (Task 5.6)                                        */
 /* ------------------------------------------------------------------ */
 .session-picker {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
+  background: var(--canvas-warm);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -552,7 +545,7 @@ body {
 .session-picker-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-bottom: 4px;
 }
 
@@ -561,9 +554,9 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--canvas);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-subtle);
   gap: 12px;
 }
 
@@ -577,7 +570,7 @@ body {
 
 .session-title {
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -585,17 +578,17 @@ body {
 
 .session-status {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--ink-fog);
   text-transform: capitalize;
 }
 
 .session-date {
   font-size: 11px;
-  color: var(--text-disabled, var(--text-muted));
+  color: var(--text-disabled, var(--ink-fog));
 }
 
 .btn-resume {
-  background: #7c3aed;
+  background: var(--signal);
   color: #fff;
   padding: 6px 14px;
   font-size: 13px;
@@ -603,23 +596,25 @@ body {
 }
 
 .btn-resume:hover:not(:disabled) {
-  background: #6d28d9;
+  background: var(--signal-dark);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Stop Button  (Task 5.6)                                           */
 /* ------------------------------------------------------------------ */
 .btn-stop {
-  background: #dc2626;
+  background: var(--error);
   color: #fff;
 }
 
 .btn-stop:hover:not(:disabled) {
-  background: #b91c1c;
+  background: var(--error);
+  filter: brightness(0.9);
 }
 
 .btn-stop.cancelling {
-  background: #7f1d1d;
+  background: var(--error);
+  filter: brightness(0.7);
   cursor: wait;
 }
 
@@ -632,37 +627,37 @@ body {
 }
 
 .btn-mic {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--canvas-stone);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
   flex: 1;
 }
 
 .btn-mic:hover:not(:disabled) {
-  background: var(--border);
+  background: var(--canvas-mist);
 }
 
 .btn-mic.muted {
-  background: #2a0000;
+  background: var(--error-soft);
   color: var(--error);
-  border-color: #500000;
+  border-color: var(--error);
 }
 
 .btn-pause {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--canvas-stone);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
   flex: 1;
 }
 
 .btn-pause:hover:not(:disabled) {
-  background: var(--border);
+  background: var(--canvas-mist);
 }
 
 .btn-pause.paused {
-  background: #2a1800;
+  background: var(--warning-soft);
   color: var(--warning);
-  border-color: #5a3800;
+  border-color: var(--warning);
 }
 </style>
 </head>
@@ -2138,7 +2133,7 @@ body {
     return html`
       <div id="app">
         <div class="app-header">
-          <div class="app-title">AMPLIFIER VOICE</div>
+          <h1 class="wordmark wordmark-sm">amplifier voice</h1>
           <div style="display:flex;align-items:center;gap:8px;">
             ${muted && html`<span class="muted-badge">🎙 Muted</span>`}
             <div class=${'status-badge ' + rtcState}>

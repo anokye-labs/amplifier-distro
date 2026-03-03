@@ -1,76 +1,4 @@
 /* ================================================================== */
-/*  CSS Variable Theming System (from kepler)                          */
-/* ================================================================== */
-
-/* Light mode (default) */
-:root {
-  /* Backgrounds */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f8f8;
-  --bg-tertiary: #f0f0f0;
-  --bg-card: #ffffff;
-  --bg-overlay: rgba(0, 0, 0, 0.4);
-  
-  /* Text hierarchy */
-  --text-primary: #171717;
-  --text-secondary: #404040;
-  --text-muted: #555555;
-  --text-disabled: #888888;
-  
-  /* Borders */
-  --border: #d4d4d4;
-  --border-muted: #e5e5e5;
-  
-  /* Accents */
-  --accent: #4f5bd5;
-  --accent-hover: #3d4abf;
-  --accent-bg: rgba(79, 91, 213, 0.1);
-  --accent-glow: rgba(79, 91, 213, 0.3);
-  
-  /* Neon glow (magenta for light mode visibility) */
-  --neon-primary: #ff00de;
-  --neon-secondary: #fff;
-  
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-  
-  /* Font */
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-}
-
-/* Dark mode */
-.dark {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #141414;
-  --bg-tertiary: #1c1c1c;
-  --bg-card: #242424;
-  --bg-overlay: rgba(0, 0, 0, 0.7);
-  
-  --text-primary: #e6e6e6;
-  --text-secondary: #a3a3a3;
-  --text-muted: #6b6b6b;
-  --text-disabled: #4a4a4a;
-  
-  --border: #363636;
-  --border-muted: #242424;
-  
-  --accent: #5b6cf0;
-  --accent-hover: #7b8af5;
-  --accent-bg: rgba(91, 108, 240, 0.15);
-  --accent-glow: rgba(91, 108, 240, 0.4);
-  
-  --neon-primary: #ff00de;
-  --neon-secondary: #fff;
-  
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
-}
-
-/* ================================================================== */
 /*  Reset & Base                                                      */
 /* ================================================================== */
 
@@ -88,14 +16,14 @@ html {
 
 body {
   height: 100%;
-  font-family: var(--font);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: var(--font-body);
+  background: var(--canvas);
+  color: var(--ink);
   line-height: 1.6;
   display: flex;
   justify-content: center;
   padding: 48px 20px;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color var(--duration-normal) var(--ease-out), color var(--duration-normal) var(--ease-out);
 }
 
 /* ================================================================== */
@@ -112,13 +40,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--canvas-mist);
   border-radius: 5px;
-  border: 2px solid var(--bg-primary);
+  border: 2px solid var(--canvas);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--ink-fog);
 }
 
 /* ================================================================== */
@@ -128,41 +56,29 @@ body {
 .container {
   max-width: 720px;
   width: 100%;
-  animation: fadeIn 0.6s ease-out;
+  animation: fadeIn var(--duration-normal) var(--ease-out);
 }
 
 /* ================================================================== */
-/*  Neon Logo (from kepler)                                           */
+/*  Wordmark                                                          */
 /* ================================================================== */
 
 .logo-wrapper {
   text-align: center;
   margin-bottom: 16px;
-  animation: logoEntrance 0.8s ease-out;
+  animation: logoEntrance 0.8s var(--ease-out);
 }
 
-.neon-logo {
-  font-family: 'Monoton', cursive;
-  font-size: clamp(2.5rem, 8vw, 4.5rem);
-  color: var(--neon-secondary);
-  text-shadow:
-    0 0   5px var(--neon-secondary),
-    0 0  10px var(--neon-secondary),
-    0 0  20px var(--neon-primary),
-    0 0  40px var(--neon-primary),
-    0 0  80px var(--neon-primary),
-    0 0 120px var(--neon-primary);
-  letter-spacing: 0.05em;
-  margin: 0;
-  padding: 24px 0;
-}
+/* ================================================================== */
+/*  Tagline                                                           */
+/* ================================================================== */
 
 .tagline {
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   font-size: 15px;
   margin-bottom: 48px;
   text-align: center;
-  animation: slideUp 0.6s ease-out 0.2s both;
+  animation: slideUp var(--duration-normal) var(--ease-out) 0.2s both;
 }
 
 /* ================================================================== */
@@ -174,9 +90,9 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  color: var(--text-muted);
+  color: var(--ink-fog);
   margin-bottom: 16px;
-  animation: slideUp 0.6s ease-out 0.3s both;
+  animation: slideUp var(--duration-normal) var(--ease-out) 0.3s both;
 }
 
 /* ================================================================== */
@@ -193,16 +109,16 @@ body {
 .app-card {
   display: block;
   padding: 24px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  background: var(--canvas-warm);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-card);
   text-decoration: none;
-  color: var(--text-primary);
-  transition: all 0.2s ease;
+  color: var(--ink);
+  transition: all var(--duration-normal) var(--ease-out);
   position: relative;
   overflow: hidden;
-  animation: slideUp 0.6s ease-out both;
-  box-shadow: var(--shadow-sm);
+  animation: slideUp var(--duration-normal) var(--ease-out) both;
+  box-shadow: var(--shadow-lift);
 }
 
 /* Staggered animation delays */
@@ -218,21 +134,21 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+  background: var(--signal-soft);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-normal) var(--ease-out);
   z-index: 0;
 }
 
 .app-card:hover {
-  border-color: var(--accent);
-  background: var(--bg-card);
+  border-color: var(--signal);
+  background: var(--canvas);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg), 0 0 20px var(--accent-glow);
+  box-shadow: var(--shadow-elevate);
 }
 
 .app-card:hover::before {
-  opacity: 0.05;
+  opacity: 1;
 }
 
 .app-card > * {
@@ -245,7 +161,7 @@ body {
   margin-bottom: 12px;
   display: block;
   filter: grayscale(0.3);
-  transition: filter 0.2s ease, transform 0.2s ease;
+  transition: filter var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .app-card:hover .app-icon {
@@ -257,12 +173,12 @@ body {
   font-size: 16px;
   font-weight: 700;
   margin-bottom: 6px;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 .app-desc {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   line-height: 1.5;
 }
 
@@ -276,14 +192,14 @@ body {
   gap: 16px;
   margin-bottom: 32px;
   justify-content: center;
-  animation: slideUp 0.6s ease-out 0.6s both;
+  animation: slideUp var(--duration-normal) var(--ease-out) 0.6s both;
 }
 
 .links a {
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   text-decoration: none;
   font-size: 14px;
-  transition: color 0.2s ease;
+  transition: color var(--duration-fast) var(--ease-out);
   position: relative;
 }
 
@@ -294,13 +210,13 @@ body {
   left: 0;
   right: 0;
   height: 1px;
-  background: var(--accent);
+  background: var(--signal);
   transform: scaleX(0);
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 .links a:hover {
-  color: var(--accent);
+  color: var(--signal);
 }
 
 .links a:hover::after {
@@ -308,7 +224,7 @@ body {
 }
 
 .links .sep {
-  color: var(--border);
+  color: var(--canvas-mist);
   user-select: none;
 }
 
@@ -318,19 +234,19 @@ body {
 
 .footer {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--ink-fog);
   text-align: center;
-  animation: fadeIn 0.6s ease-out 0.7s both;
+  animation: fadeIn var(--duration-normal) var(--ease-out) 0.7s both;
 }
 
 .footer a {
-  color: var(--text-muted);
+  color: var(--ink-fog);
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
 .footer a:hover {
-  color: var(--accent);
+  color: var(--signal);
 }
 
 /* ================================================================== */
@@ -339,7 +255,7 @@ body {
 
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
 
 @keyframes slideUp {
@@ -364,15 +280,6 @@ body {
   }
 }
 
-@keyframes glow {
-  0% {
-    box-shadow: 0 0 20px var(--accent-glow);
-  }
-  100% {
-    box-shadow: 0 0 30px var(--accent-glow);
-  }
-}
-
 /* ================================================================== */
 /*  Accessibility - Reduce Motion                                     */
 /* ================================================================== */
@@ -385,12 +292,6 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  
-  .neon-logo {
-    text-shadow:
-      0 0  10px var(--neon-secondary),
-      0 0  20px var(--neon-primary);
-  }
 }
 
 /* ================================================================== */
@@ -401,23 +302,13 @@ body {
   body {
     padding: 32px 16px;
   }
-  
-  .neon-logo {
-    font-size: 2.5rem;
-  }
-  
+
   .apps-grid {
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  
+
   .app-card {
     padding: 20px;
-  }
-}
-
-@media (max-width: 400px) {
-  .neon-logo {
-    font-size: 2rem;
   }
 }
