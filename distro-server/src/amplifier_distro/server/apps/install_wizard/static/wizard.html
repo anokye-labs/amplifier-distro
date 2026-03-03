@@ -9,11 +9,6 @@
 <!-- Theme init (must be first) -->
 <script src="/static/theme-init.js"></script>
 
-<!-- Monoton font -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
-
 <!-- Shared theme -->
 <link rel="stylesheet" href="/static/amplifier-theme.css">
 
@@ -51,31 +46,31 @@ body {
   justify-content: center;
   font-size: 14px;
   font-weight: 600;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  border: 2px solid var(--border);
-  transition: all 0.25s ease;
+  background: var(--canvas);
+  color: var(--ink-slate);
+  border: 2px solid var(--canvas-mist);
+  transition: all var(--duration-fast) var(--ease-out);
   cursor: default;
   position: relative;
 }
 
 .step-dot.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--signal);
+  color: var(--canvas);
+  border-color: var(--signal);
 }
 
 .step-dot.completed {
   background: var(--success);
-  color: #fff;
+  color: var(--canvas);
   border-color: var(--success);
 }
 
 .step-connector {
   width: 40px;
   height: 2px;
-  background: var(--border);
-  transition: background 0.25s ease;
+  background: var(--canvas-mist);
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
 .step-connector.completed {
@@ -86,15 +81,16 @@ body {
 /*  Card Container                                                     */
 /* ------------------------------------------------------------------ */
 .wizard-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--canvas-stone);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-card);
   padding: 40px;
   width: 100%;
   max-width: 640px;
   min-height: 400px;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-lift);
 }
 
 .wizard-card h1 {
@@ -104,7 +100,7 @@ body {
 }
 
 .wizard-card .subtitle {
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   font-size: 15px;
   margin-bottom: 32px;
 }
@@ -122,55 +118,56 @@ body {
   align-items: center;
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--canvas-mist);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Buttons                                                            */
 /* ------------------------------------------------------------------ */
 button, .btn {
-  font-family: var(--font);
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
   padding: 10px 24px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-input);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--signal);
+  color: var(--canvas);
+  border-color: var(--signal);
+  transition: all var(--duration-fast) var(--ease-spring);
 }
-.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-primary:hover { background: var(--signal-light); border-color: var(--signal-light); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-secondary {
   background: transparent;
-  color: var(--text-secondary);
-  border-color: var(--border);
+  color: var(--ink-slate);
+  border-color: var(--canvas-mist);
 }
-.btn-secondary:hover { color: var(--text-primary); border-color: var(--text-primary); }
+.btn-secondary:hover { color: var(--ink); border-color: var(--ink); }
 
 .btn-ghost {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   border: none;
   padding: 10px 16px;
 }
-.btn-ghost:hover { color: var(--text-primary); }
+.btn-ghost:hover { color: var(--ink); }
 
 .btn-success {
   background: var(--success);
-  color: #fff;
+  color: var(--canvas);
   border-color: var(--success);
 }
-.btn-success:hover { background: #16a34a; border-color: #16a34a; }
+.btn-success:hover { filter: brightness(0.9); }
 
 .btn-sm { padding: 6px 14px; font-size: 13px; }
 
@@ -181,7 +178,7 @@ label {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -193,18 +190,18 @@ input[type="number"],
 select {
   width: 100%;
   padding: 10px 14px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: var(--font);
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
+  font-family: var(--font-body);
   font-size: 14px;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 
 input:focus, select:focus {
-  border-color: var(--accent);
+  border-color: var(--signal);
 }
 
 .field-group {
@@ -213,7 +210,7 @@ input:focus, select:focus {
 
 .field-hint {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-top: 4px;
 }
 
@@ -230,18 +227,18 @@ input:focus, select:focus {
 }
 
 .module-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--canvas);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
   padding: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.module-card:hover { border-color: var(--accent); }
-.module-card.selected { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+.module-card:hover { border-color: var(--signal); }
+.module-card.selected { border-color: var(--signal); background: var(--signal-soft); }
 
 .module-card .module-header {
   display: flex;
@@ -256,7 +253,7 @@ input:focus, select:focus {
 
 .module-card .module-desc {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   line-height: 1.4;
 }
 
@@ -264,34 +261,34 @@ input:focus, select:focus {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-.badge-provider { background: rgba(139,92,246,0.2); color: #a78bfa; }
-.badge-tool     { background: rgba(59,130,246,0.2);  color: #93c5fd; }
-.badge-bundle   { background: rgba(245,158,11,0.2);  color: #fbbf24; }
+.badge-provider { background: var(--signal-soft);  color: var(--signal); }
+.badge-tool     { background: var(--signal-soft);  color: var(--signal); }
+.badge-bundle   { background: var(--warning-soft); color: var(--warning); }
 
 .checkbox-icon {
   width: 18px;
   height: 18px;
-  border-radius: 4px;
-  border: 2px solid var(--border);
+  border-radius: var(--radius-subtle);
+  border: 2px solid var(--canvas-mist);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-out);
 }
 .module-card.selected .checkbox-icon {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--signal);
+  border-color: var(--signal);
 }
 .module-card.selected .checkbox-icon::after {
   content: '';
   width: 6px;
   height: 10px;
-  border: solid #fff;
+  border: solid var(--canvas);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) translate(-1px, -1px);
 }
@@ -306,9 +303,9 @@ input:focus, select:focus {
 }
 
 .interface-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--canvas);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
   padding: 20px;
   display: flex;
   align-items: center;
@@ -316,7 +313,7 @@ input:focus, select:focus {
 }
 
 .interface-info h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-.interface-info p  { font-size: 13px; color: var(--text-secondary); }
+.interface-info p  { font-size: 13px; color: var(--ink-slate); }
 
 .installed-badge {
   font-size: 13px;
@@ -324,7 +321,7 @@ input:focus, select:focus {
   color: var(--success);
   padding: 6px 14px;
   border: 1px solid var(--success);
-  border-radius: var(--radius);
+  border-radius: var(--radius-input);
 }
 
 /* ------------------------------------------------------------------ */
@@ -338,19 +335,19 @@ input:focus, select:focus {
 }
 
 .provider-card {
-  background: var(--bg-card);
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--canvas);
+  border: 2px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
   padding: 16px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-out);
 }
-.provider-card:hover { border-color: var(--accent); }
-.provider-card.selected { border-color: var(--accent); background: rgba(59,130,246,0.08); }
+.provider-card:hover { border-color: var(--signal); }
+.provider-card.selected { border-color: var(--signal); background: var(--signal-soft); }
 .provider-card.configured { border-color: var(--success); }
-.provider-card.configured.selected { border-color: var(--accent); }
-.provider-card.detected { border-color: var(--warning, #f59e0b); border-style: dashed; }
-.provider-card.detected.selected { border-color: var(--accent); border-style: solid; }
+.provider-card.configured.selected { border-color: var(--signal); }
+.provider-card.detected { border-color: var(--warning); border-style: dashed; }
+.provider-card.detected.selected { border-color: var(--signal); border-style: solid; }
 
 .provider-card-header {
   display: flex;
@@ -364,23 +361,23 @@ input:focus, select:focus {
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
 }
 .provider-badge.configured {
-  background: rgba(34,197,94,0.15);
+  background: var(--success-soft);
   color: var(--success);
 }
 .provider-badge.detected {
-  background: rgba(245,158,11,0.15);
-  color: var(--warning, #f59e0b);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
-.provider-card p { font-size: 13px; color: var(--text-secondary); margin: 0 0 6px; }
+.provider-card p { font-size: 13px; color: var(--ink-slate); margin: 0 0 6px; }
 
 .provider-card .provider-link {
   display: inline-block;
   font-size: 12px;
-  color: var(--accent);
+  color: var(--signal);
   text-decoration: none;
 }
 .provider-card .provider-link:hover { text-decoration: underline; }
@@ -392,11 +389,11 @@ input:focus, select:focus {
   justify-content: space-between;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--canvas-mist);
 }
 .env-hint {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
 }
 
 .provider-key-row {
@@ -405,33 +402,33 @@ input:focus, select:focus {
   align-items: center;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--canvas-mist);
 }
 .provider-key-row input {
   flex: 1;
   font-size: 13px;
   padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-main);
-  color: var(--text-primary);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
+  background: var(--canvas);
+  color: var(--ink);
 }
 
 .provider-save-msg {
   font-size: 12px;
   margin-top: 6px;
   padding: 4px 8px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-input);
 }
-.provider-save-msg.ok   { background: rgba(34,197,94,0.1);  color: var(--success); }
-.provider-save-msg.fail { background: rgba(239,68,68,0.1);  color: var(--error); }
+.provider-save-msg.ok   { background: var(--success-soft); color: var(--success); }
+.provider-save-msg.fail { background: var(--error-soft);   color: var(--error); }
 
 .configured-summary {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-bottom: 16px;
 }
-.configured-summary strong { color: var(--text-primary); }
+.configured-summary strong { color: var(--ink); }
 
 /* ------------------------------------------------------------------ */
 /*  Verification Checklist                                             */
@@ -450,8 +447,8 @@ input:focus, select:focus {
   gap: 12px;
   font-size: 15px;
   padding: 12px 16px;
-  background: var(--bg-card);
-  border-radius: var(--radius);
+  background: var(--canvas);
+  border-radius: var(--radius-input);
 }
 
 .check-icon {
@@ -465,12 +462,12 @@ input:focus, select:focus {
   font-size: 13px;
   font-weight: 700;
 }
-.check-icon.pass    { background: var(--success); color: #fff; }
-.check-icon.fail    { background: var(--error);   color: #fff; }
-.check-icon.pending { background: var(--bg-secondary); color: var(--text-secondary); border: 2px solid var(--border); }
+.check-icon.pass    { background: var(--success); color: var(--canvas); }
+.check-icon.fail    { background: var(--error);   color: var(--canvas); }
+.check-icon.pending { background: var(--canvas-warm); color: var(--ink-slate); border: 2px solid var(--canvas-mist); }
 
 .check-label { flex: 1; }
-.check-msg   { font-size: 12px; color: var(--text-secondary); }
+.check-msg   { font-size: 12px; color: var(--ink-slate); }
 
 /* ------------------------------------------------------------------ */
 /*  Toggle Switch                                                      */
@@ -485,24 +482,24 @@ input:focus, select:focus {
 .toggle {
   width: 48px;
   height: 26px;
-  background: var(--bg-card);
-  border: 2px solid var(--border);
-  border-radius: 13px;
+  background: var(--canvas);
+  border: 2px solid var(--canvas-mist);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   position: relative;
-  transition: all 0.2s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   flex-shrink: 0;
 }
-.toggle.on { background: var(--accent); border-color: var(--accent); }
+.toggle.on { background: var(--signal); border-color: var(--signal); }
 .toggle .toggle-knob {
   width: 18px;
   height: 18px;
-  background: #fff;
+  background: var(--canvas);
   border-radius: 50%;
   position: absolute;
   top: 2px;
   left: 2px;
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 .toggle.on .toggle-knob { transform: translateX(22px); }
 
@@ -510,10 +507,10 @@ input:focus, select:focus {
 
 .optional-note {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   padding: 12px 16px;
-  background: var(--bg-card);
-  border-radius: var(--radius);
+  background: var(--canvas);
+  border-radius: var(--radius-input);
   margin-top: 16px;
   line-height: 1.5;
 }
@@ -523,7 +520,7 @@ input:focus, select:focus {
 /* ------------------------------------------------------------------ */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--canvas-mist); border-radius: 3px; }
 
 /* ------------------------------------------------------------------ */
 /*  Status / Spinner                                                   */
@@ -531,8 +528,8 @@ input:focus, select:focus {
 .spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border: 2px solid var(--canvas-mist);
+  border-top-color: var(--signal);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   display: inline-block;
@@ -541,7 +538,7 @@ input:focus, select:focus {
 
 .status-line {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -557,10 +554,10 @@ input:focus, select:focus {
 <body>
 
 <!-- ============================================================== -->
-<!--  Neon Logo                                                       -->
+<!--  Wordmark                                                        -->
 <!-- ============================================================== -->
-<div class="neon-logo-wrapper">
-  <h1 class="neon-logo neon-logo-sm">AMPLIFIER</h1>
+<div class="wordmark-wrapper">
+  <h1 class="wordmark wordmark-sm">amplifier</h1>
 </div>
 
 <!-- ============================================================== -->
@@ -856,7 +853,7 @@ function renderConfig() {
 function renderModules() {
   const mods = state.modules;
   const fallbackModules = state.modules.length > 0 ? '' : `
-    <p style="color: var(--text-secondary); padding: 40px 0; text-align: center;">
+    <p style="color: var(--ink-slate); padding: 40px 0; text-align: center;">
       Feature list unavailable. The backend will provide available features once connected.
     </p>`;
 
