@@ -1020,3 +1020,40 @@ class TestMockBackendNewMethods:
         q: asyncio.Queue = asyncio.Queue()
         await backend.resume_session("s", "~", event_queue=q)
         assert any(c["method"] == "resume_session" for c in backend.calls)
+
+
+class TestUpdateSessionMetadata:
+    """Verify update_session_metadata on MockBackend and Protocol compliance."""
+
+    async def test_mock_backend_update_session_metadata_returns_true(self):
+        """MockBackend.update_session_metadata records the call and returns True."""
+        from amplifier_distro.server.session_backend import MockBackend
+
+        backend = MockBackend()
+        result = await backend.update_session_metadata(
+            "sess-001", {"name": "My Session"}
+        )
+
+        assert result is True
+        assert any(
+            c["method"] == "update_session_metadata" and c["session_id"] == "sess-001"
+            for c in backend.calls
+        )
+
+    async def test_mock_backend_update_records_updates_dict(self):
+        """MockBackend records the full updates dict in the call log."""
+        from amplifier_distro.server.session_backend import MockBackend
+
+        backend = MockBackend()
+        await backend.update_session_metadata("sess-002", {"name": "Renamed"})
+
+        call = next(
+            c for c in backend.calls if c["method"] == "update_session_metadata"
+        )
+        assert call["updates"] == {"name": "Renamed"}
+
+    async def test_protocol_has_update_session_metadata(self):
+        """SessionBackend Protocol must declare update_session_metadata."""
+        from amplifier_distro.server.session_backend import SessionBackend
+
+        assert hasattr(SessionBackend, "update_session_metadata")

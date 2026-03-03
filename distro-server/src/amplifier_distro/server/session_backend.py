@@ -161,6 +161,10 @@ class SessionBackend(Protocol):
         """List all active sessions managed by this backend."""
         ...
 
+    async def update_session_metadata(self, session_id: str, updates: dict) -> bool:
+        """Update metadata for a session. Returns True if found and written."""
+        ...
+
 
 class MockBackend:
     """Mock backend for testing and simulation.
@@ -240,6 +244,17 @@ class MockBackend:
         if session_id in self._sessions:
             self._sessions[session_id].is_active = False
         self.calls.append({"method": "end_session", "session_id": session_id})
+
+    async def update_session_metadata(self, session_id: str, updates: dict) -> bool:
+        """Record the call and return True (testing stub)."""
+        self.calls.append(
+            {
+                "method": "update_session_metadata",
+                "session_id": session_id,
+                "updates": updates,
+            }
+        )
+        return True
 
     async def get_session_info(self, session_id: str) -> SessionInfo | None:
         return self._sessions.get(session_id)
