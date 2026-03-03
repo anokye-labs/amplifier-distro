@@ -1255,10 +1255,11 @@
   function formatCommandResult(command, result) {
     if (result.error) return { text: result.error };
 
+    const h = s => '<span class="config-heading">' + s + '</span>';
+    const d = s => '<span class="config-dim">' + s + '</span>';
+    const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
     if (command === 'config' && result.type === 'config') {
-      const h = s => '<span class="config-heading">' + s + '</span>';
-      const d = s => '<span class="config-dim">' + s + '</span>';
-      const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 
       const lines = [];
       const sess = result.session || {};
