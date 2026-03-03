@@ -35,6 +35,7 @@ from amplifier_distro.conventions import (
     PROJECTS_DIR,
     TRANSCRIPT_FILENAME,
 )
+from amplifier_distro.distro_settings import load as load_distro_settings
 from amplifier_distro.server.app import AppManifest
 from amplifier_distro.server.apps.chat.pin_storage import (
     add_pin,
@@ -136,10 +137,29 @@ def _load_transcript_payload(session_id: str) -> dict | None:
 
 @router.get("/", response_class=HTMLResponse)
 async def index() -> HTMLResponse:
-    """Serve the chat interface."""
+    """Serve the chat interface with injected workspace_root."""
     html_file = _static_dir / "index.html"
     if html_file.exists():
-        return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
+        html_content = html_file.read_text(encoding="utf-8")
+        
+        # Inject workspace_root from settings to avoid race condition on initial session
+        settings = load_distro_settings()
+        workspace_root = settings.workspace_root or "~"
+        
+        # Inject as a script tag that runs before any React code
+        injection = f'<script>window.__AMPLIFIER_WORKSPACE_ROOT = {json.dumps(workspace_root)};</script>'
+        
+        # Insert after <head> tag or at start of <body>
+        if "<head>" in html_content:
+            html_content = html_content.replace("<head>", f"<head>\n{injection}", 1)
+        elif "<body>" in html_content:
+            html_content = html_content.replace("<body>", f"<body>\n{injection}", 1)
+        else:
+            # Fallback: prepend to content
+            html_content = injection + "\n" + html_content
+        
+        return HTMLResponse(content=html_content)
+    
     return HTMLResponse(
         content=(
             "<html><body>"
