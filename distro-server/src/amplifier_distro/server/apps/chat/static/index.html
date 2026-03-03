@@ -2306,6 +2306,20 @@
           });
         }
 
+        if (msg.type === 'session_renamed') {
+          setSessions(prev => {
+            const next = new Map(prev);
+            for (const [key, s] of next) {
+              if (s.sessionId === msg.session_id) {
+                next.set(key, { ...s, name: msg.name });
+                break;
+              }
+            }
+            return next;
+          });
+          return;
+        }
+
         if (msg.type === 'session_fork') {
           applySessionForkLineage(msg);
         }
@@ -2626,6 +2640,19 @@
             content: 'Cancellation requested…',
             streaming: false, order: orderCounterRef.current++,
           }]);
+          break;
+
+        case 'session_renamed':
+          setSessions(prev => {
+            const next = new Map(prev);
+            for (const [key, s] of next) {
+              if (s.sessionId === msg.session_id) {
+                next.set(key, { ...s, name: msg.name });
+                break;
+              }
+            }
+            return next;
+          });
           break;
 
         case 'pong':
