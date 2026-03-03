@@ -1940,7 +1940,7 @@
     `;
   }
 
-  function SessionOverflowMenu({ isPinned, onPin, onRename, onClose }) {
+  function SessionOverflowMenu({ isPinned, canPin, onPin, onRename, onClose }) {
     const menuRef = useRef(null);
     useEffect(() => {
       function handleClickOutside(e) {
@@ -1956,10 +1956,12 @@
 
     return html`
       <div class="session-overflow-menu" ref=${menuRef} role="menu" aria-label="Session actions">
-        <button class="session-overflow-item" role="menuitem"
-          onClick=${(e) => { e.stopPropagation(); onPin(); onClose(); }}>
-          ${isPinned ? 'Unpin' : 'Pin to top'}
-        </button>
+        ${canPin && html`
+          <button class="session-overflow-item" role="menuitem"
+            onClick=${(e) => { e.stopPropagation(); onPin(); onClose(); }}>
+            ${isPinned ? 'Unpin' : 'Pin to top'}
+          </button>
+        `}
         <button class="session-overflow-item" role="menuitem"
           onClick=${(e) => { e.stopPropagation(); onRename(); onClose(); }}>
           Rename
@@ -2121,6 +2123,7 @@
           ${menuOpen && html`
             <${SessionOverflowMenu}
               isPinned=${isPinned}
+              canPin=${!!session.sessionId}
               onPin=${() => onTogglePin(session.sessionId, isPinned)}
               onRename=${(e) => startEditing(e)}
               onClose=${() => setMenuOpen(false)}
