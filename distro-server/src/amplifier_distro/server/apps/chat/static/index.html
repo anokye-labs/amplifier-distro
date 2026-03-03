@@ -1159,6 +1159,46 @@
     }
     /* Ensure session-card is position relative */
     .session-card { position: relative; }
+    /* Pin animation tokens */
+    :root {
+      --pin-duration-icon: 150ms;
+      --pin-duration-card-enter: 200ms;
+      --pin-duration-card-exit: 150ms;
+      --pin-duration-section: 250ms;
+      --pin-ease-settle: cubic-bezier(0.0, 0.0, 0.2, 1);
+      --pin-ease-depart: cubic-bezier(0.4, 0.0, 1, 1);
+      --pin-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes pin-enter {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .session-card-just-pinned {
+      animation: pin-enter var(--pin-duration-card-enter) var(--pin-ease-settle) both;
+    }
+    @keyframes unpin-exit {
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0; transform: scale(0.97); }
+    }
+    .session-card-unpinning {
+      animation: unpin-exit var(--pin-duration-card-exit) var(--pin-ease-depart) both;
+    }
+    @keyframes unpin-enter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .session-card-just-unpinned {
+      animation: unpin-enter var(--pin-duration-card-enter) var(--pin-ease-settle) both;
+      animation-delay: var(--pin-duration-card-exit);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .session-card-just-pinned,
+      .session-card-unpinning,
+      .session-card-just-unpinned {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -3273,15 +3313,33 @@
 
     const handleTogglePin = useCallback(async (sessionId, currentlyPinned) => {
       if (currentlyPinned) {
-        await apiUnpinSession(sessionId);
-        setPinnedSessionIds(prev => {
-          const next = new Set(prev);
-          next.delete(sessionId);
-          return next;
-        });
+        const card = document.querySelector('[data-session-id="' + sessionId + '"]');
+        if (card) card.classList.add('session-card-unpinning');
+        setTimeout(async () => {
+          await apiUnpinSession(sessionId);
+          setPinnedSessionIds(prev => {
+            const next = new Set(prev);
+            next.delete(sessionId);
+            return next;
+          });
+          requestAnimationFrame(() => {
+            const el = document.querySelector('[data-session-id="' + sessionId + '"]');
+            if (el) {
+              el.classList.add('session-card-just-unpinned');
+              setTimeout(() => el.classList.remove('session-card-just-unpinned'), 400);
+            }
+          });
+        }, 150);
       } else {
         await apiPinSession(sessionId);
         setPinnedSessionIds(prev => new Set(prev).add(sessionId));
+        requestAnimationFrame(() => {
+          const el = document.querySelector('[data-session-id="' + sessionId + '"]');
+          if (el) {
+            el.classList.add('session-card-just-pinned');
+            setTimeout(() => el.classList.remove('session-card-just-pinned'), 250);
+          }
+        });
       }
     }, []);
 
