@@ -64,7 +64,7 @@ ensure_uv
 echo ""
 
 echo "[1/3] Installing amplifier-distro..."
-uv tool install --force "git+${REPO_URL}@main#subdirectory=distro-server"
+uv tool install --force --upgrade "git+${REPO_URL}@main#subdirectory=distro-server"
 
 echo ""
 echo "=== Install complete ==="
