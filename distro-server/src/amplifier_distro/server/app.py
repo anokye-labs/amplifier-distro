@@ -585,6 +585,22 @@ class DistroServer:
                     content={"error": str(e), "type": type(e).__name__},
                 )
 
+        @self._core_router.get("/memory/stats")
+        async def memory_stats() -> JSONResponse:
+            """Return aggregate memory statistics."""
+            from amplifier_distro.server.memory import get_memory_service
+
+            try:
+                service = get_memory_service()
+                result = service.stats()
+                return JSONResponse(content=result)
+            except (RuntimeError, OSError, ValueError, KeyError) as e:
+                logger.warning("Memory stats failed: %s", e, exc_info=True)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": str(e), "type": type(e).__name__},
+                )
+
         @self._core_router.get("/memory/recall")
         async def memory_recall(q: str = "") -> JSONResponse:
             """Search memories by content, tags, and category."""

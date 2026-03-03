@@ -877,7 +877,7 @@ async function loadAll() {
     fetch('/apps/install-wizard/detect').then(r => r.ok ? r.json() : { error: 'HTTP ' + r.status }).catch(() => ({ error: true })),
     api('GET', '/distro-settings'),
     coreApi('GET', '/integrations'),
-    coreApi('GET', '/memory/recall?q=*').catch(() => ({ error: true })),
+    coreApi('GET', '/memory/stats').catch(() => ({ error: true })),
     coreApi('GET', '/memory/work-status'),
     coreApi('GET', '/status'),
     api('GET', '/providers'),
@@ -1322,14 +1322,14 @@ function renderMemoryStats() {
 
   let lastUpdate = '--';
   if (state.workStatus && state.workStatus.items && state.workStatus.items.length > 0) {
-    const last = state.workStatus.items[state.workStatus.items.length - 1];
-    if (last.updated) {
+    const maxTs = Math.max(...state.workStatus.items
+      .filter(i => i.updated)
+      .map(i => new Date(i.updated).getTime()));
+    if (isFinite(maxTs)) {
       try {
-        const d = new Date(last.updated);
+        const d = new Date(maxTs);
         lastUpdate = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-      } catch (e) {
-        lastUpdate = last.updated;
-      }
+      } catch (e) { lastUpdate = '--'; }
     }
   }
 
