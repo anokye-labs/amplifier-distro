@@ -459,6 +459,14 @@ class ChatConnection:
                 return {"cwd": new_cwd, "session_id": info.session_id}
             case "config":
                 return self._build_config_summary()
+            case "tools":
+                return self._build_tools_list()
+            case "agents":
+                return self._build_agents_list()
+            case "modes":
+                return self._build_modes_list()
+            case "mode":
+                return self._handle_mode_command(args)
             case _:
                 return {"error": f"Unknown command: {name}"}
 
@@ -517,6 +525,91 @@ class ChatConnection:
             "hooks": hook_names,
             "agents": agent_names,
         }
+
+    def _build_tools_list(self) -> dict[str, Any]:
+        """Build a structured tool list for the /tools command."""
+        if not self._session_id:
+            return {"error": "No active session"}
+        tools = self._backend.list_tools(self._session_id)
+        if tools is None:
+            return {"error": "Session unavailable"}
+        return {"type": "tools", "tools": tools}
+
+    def _build_agents_list(self) -> dict[str, Any]:
+        """Build a structured agent list for the /agents command."""
+        if not self._session_id:
+            return {"error": "No active session"}
+        config = self._backend.get_session_config(self._session_id)
+        if config is None:
+            return {"error": "Session config unavailable"}
+        agents = config.get("agents", {})
+        agent_list = []
+        if isinstance(agents, dict):
+            for name, spec in sorted(agents.items()):
+                if name in ("dirs", "include", "inline") or not isinstance(spec, dict):
+                    continue
+                agent_list.append(
+                    {
+                        "name": name,
+                        "description": spec.get("description", "No description"),
+                    }
+                )
+        return {"type": "agents", "agents": agent_list}
+
+    def _build_modes_list(self) -> dict[str, Any]:
+        """Build a structured modes list for the /modes command."""
+        if not self._session_id:
+            return {"error": "No active session"}
+        result = self._backend.list_modes(self._session_id)
+        if result is None:
+            return {"error": "Session unavailable"}
+        return {"type": "modes", **result}
+
+    def _handle_mode_command(self, args: list[str]) -> dict[str, Any]:
+        """Handle /mode [name] [on|off] command."""
+        if not self._session_id:
+            return {"error": "No active session"}
+
+        if not args:
+            # /mode with no args: show current mode
+            result = self._backend.list_modes(self._session_id)
+            if result is None:
+                return {"error": "Session unavailable"}
+            active = result.get("active_mode")
+            if active:
+                return {"type": "mode", "active_mode": active}
+            return {"type": "mode", "active_mode": None, "message": "No mode active"}
+
+        mode_arg = args[0]
+
+        # /mode off -> deactivate
+        if mode_arg == "off":
+            return {"type": "mode", **self._backend.set_mode(self._session_id, None)}
+
+        # /mode <name> [on|off]
+        qualifier = args[1] if len(args) > 1 else None
+        if qualifier == "off":
+            # /mode <name> off -> deactivate only if it's the active mode
+            result = self._backend.list_modes(self._session_id)
+            current = result.get("active_mode") if result else None
+            if current == mode_arg:
+                return {
+                    "type": "mode",
+                    **self._backend.set_mode(self._session_id, None),
+                }
+            return {"type": "mode", "active_mode": current, "message": "Not active"}
+        if qualifier == "on":
+            # /mode <name> on -> force activate
+            return {
+                "type": "mode",
+                **self._backend.set_mode(self._session_id, mode_arg),
+            }
+        # /mode <name> -> toggle
+        result = self._backend.list_modes(self._session_id)
+        current = result.get("active_mode") if result else None
+        if current == mode_arg:
+            return {"type": "mode", **self._backend.set_mode(self._session_id, None)}
+        return {"type": "mode", **self._backend.set_mode(self._session_id, mode_arg)}
 
     async def _event_fanout_loop(self) -> None:
         """Drain event_queue and forward translated events to WebSocket.

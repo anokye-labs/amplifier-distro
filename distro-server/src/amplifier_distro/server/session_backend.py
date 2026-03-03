@@ -1074,6 +1074,97 @@ class FoundationBackend:
             return None
         return getattr(handle.session, "config", None)
 
+    def list_tools(self, session_id: str) -> list[dict[str, str]] | None:
+        """Return live tool names and descriptions for a session.
+
+        Uses coordinator.get("tools") to access mounted tool instances,
+        which is the kernel's own public API for tool enumeration.
+        """
+        handle = self._sessions.get(session_id)
+        if handle is None or handle.session is None:
+            return None
+        coordinator = getattr(handle.session, "coordinator", None)
+        if coordinator is None:
+            return None
+        tools = coordinator.get("tools") or {}
+        return [
+            {
+                "name": name,
+                "description": getattr(tool, "description", "No description"),
+            }
+            for name, tool in tools.items()
+        ]
+
+    def list_modes(self, session_id: str) -> dict[str, Any] | None:
+        """Return available modes and active mode for a session.
+
+        Reads from coordinator.session_state which is populated by hooks-mode
+        at mount time.  Returns empty modes list gracefully when hooks-mode
+        is not mounted.
+        """
+        handle = self._sessions.get(session_id)
+        if handle is None or handle.session is None:
+            return None
+        coordinator = getattr(handle.session, "coordinator", None)
+        if coordinator is None:
+            return {"active_mode": None, "modes": []}
+        state = getattr(coordinator, "session_state", {})
+        discovery = state.get("mode_discovery")
+        if not discovery:
+            return {"active_mode": None, "modes": []}
+        modes = discovery.list_modes()
+        return {
+            "active_mode": state.get("active_mode"),
+            "modes": [{"name": n, "description": d, "source": s} for n, d, s in modes],
+        }
+
+    def set_mode(self, session_id: str, mode_name: str | None) -> dict[str, Any]:
+        """Activate a mode (by name) or deactivate (None).
+
+        Writes coordinator.session_state["active_mode"] directly -- the same
+        pattern the CLI uses.  The hooks-mode hooks (provider:request,
+        tool:pre) pick up the new value automatically on the next turn.
+        Gate policies are intentionally bypassed since this is a direct
+        user action, not an AI-agent-initiated mode switch.
+        """
+        handle = self._sessions.get(session_id)
+        if handle is None or handle.session is None:
+            return {"error": "Session not found"}
+        coordinator = getattr(handle.session, "coordinator", None)
+        if coordinator is None:
+            return {"error": "Session coordinator unavailable"}
+        state = getattr(coordinator, "session_state", None)
+        if state is None:
+            return {"error": "Modes not available (hooks-mode not mounted)"}
+
+        discovery = state.get("mode_discovery")
+        mode_hooks = state.get("mode_hooks")
+        previous = state.get("active_mode")
+
+        if mode_name is None:
+            # Deactivate
+            state["active_mode"] = None
+            if mode_hooks:
+                mode_hooks.reset_warnings()
+            return {"active_mode": None, "previous_mode": previous}
+
+        # Validate mode exists
+        if not discovery:
+            return {"error": "Mode discovery not available"}
+        mode_def = discovery.find(mode_name)
+        if not mode_def:
+            available = [n for n, _d, _s in discovery.list_modes()]
+            return {
+                "error": f"Mode not found: {mode_name}",
+                "available_modes": available,
+            }
+
+        # Activate
+        state["active_mode"] = mode_name
+        if mode_hooks:
+            mode_hooks.reset_warnings()
+        return {"active_mode": mode_name, "previous_mode": previous}
+
     def list_active_sessions(self) -> list[SessionInfo]:
         return [
             SessionInfo(
