@@ -2889,7 +2889,7 @@
           });
           break;
 
-        case 'content_start':
+        case 'content_start': {
           // Remove client-side placeholder if present
           const placeholderId = placeholderIdRef.current;
           if (placeholderId) {
@@ -2915,6 +2915,7 @@
             }]);
           }
           break;
+        }
 
         case 'content_delta': {
           const delta = typeof msg.delta === 'string' ? msg.delta : '';
@@ -3132,7 +3133,7 @@
           setExecuting(false);
           break;
 
-        case 'execution_error':
+        case 'execution_error': {
           // Remove client-side placeholder if error occurs immediately
           const placeholderId = placeholderIdRef.current;
           if (placeholderId) {
@@ -3156,6 +3157,7 @@
             streaming: false, order: orderCounterRef.current++,
           }]);
           break;
+        }
 
         case 'command_result': {
           const fmt = formatCommandResult(msg.command, msg.result);
