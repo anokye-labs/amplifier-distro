@@ -1786,11 +1786,13 @@
       originalNameRef.current = session.name || '';
       setEditValue(session.name || '');
       setIsEditing(true);
+      setAnnouncement('Editing session name');
     }, [session.name]);
 
     const cancelEditing = useCallback(() => {
       setIsEditing(false);
       setEditValue('');
+      setAnnouncement('Rename cancelled');
     }, []);
 
     const saveEdit = useCallback(async () => {
@@ -1817,6 +1819,7 @@
       });
       setIsEditing(false);
       setSaved(true);
+      setAnnouncement('Session renamed to ' + trimmed);
       setTimeout(() => setSaved(false), 300);
       try {
         const resp = await fetch(`/api/sessions/${session.sessionId}`, {
@@ -1893,7 +1896,9 @@
                   onInput=${(e) => setEditValue(e.target.value)}
                   onKeyDown=${handleKeyDown}
                   onClick=${(e) => e.stopPropagation()}
-                />`
+                  aria-describedby="session-rename-hint"
+                />
+                <span id="session-rename-hint" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Press Enter to save, Escape to cancel</span>`
               : html`${sessionName}${session.pendingApproval ? html`<${Icon} name="bell" className="sm" />` : ''}`
             }
           </div>
@@ -1921,6 +1926,7 @@
             : null}
         </div>
         ${preview ? html`<div class="session-card-cwd" title=${session.lastUserMessage || ''}>${preview}</div>` : null}
+        <div aria-live="polite" class="sr-only">${announcement}</div>
       </div>
     `;
   }
