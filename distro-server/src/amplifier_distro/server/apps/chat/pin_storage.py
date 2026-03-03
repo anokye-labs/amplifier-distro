@@ -66,9 +66,7 @@ def get_pins_with_timestamps() -> dict[str, str]:
     data = _read_pin_data()
     pinned_at = data.get("pinned_at", {})
     return {
-        sid: pinned_at.get(sid, "")
-        for sid in data["pinned"]
-        if isinstance(sid, str)
+        sid: pinned_at.get(sid, "") for sid in data["pinned"] if isinstance(sid, str)
     }
 
 

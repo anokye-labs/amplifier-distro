@@ -230,7 +230,9 @@ async def pin_session(session_id: str) -> dict:
     return {"status": "pinned", "session_id": session_id}
 
 
-@router.delete("/api/sessions/{session_id}/pin", dependencies=[Depends(_require_api_key)])
+@router.delete(
+    "/api/sessions/{session_id}/pin", dependencies=[Depends(_require_api_key)]
+)
 async def unpin_session(session_id: str) -> dict:
     """Unpin a session from the top of the session list."""
     if not _VALID_SESSION_ID.fullmatch(session_id):
