@@ -1757,6 +1757,7 @@
     const [announcement, setAnnouncement] = useState('');
     const inputRef = useRef(null);
     const originalNameRef = useRef('');
+    const longPressTimerRef = useRef(null);
 
     const statusIcon =
       session.status === 'running' ? '⟳ ' :
@@ -1850,6 +1851,26 @@
       }
     }, [saveEdit, cancelEditing]);
 
+    const handleCardKeyDown = useCallback((e) => {
+      if (e.key === 'F2' && !isEditing) {
+        e.preventDefault();
+        startEditing(e);
+      }
+    }, [isEditing, startEditing]);
+
+    const handleTouchStart = useCallback((e) => {
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null;
+        startEditing(null);
+      }, 500);
+    }, [startEditing]);
+    const handleTouchEnd = useCallback(() => {
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    }, []);
+    const handleTouchMove = useCallback(() => {
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    }, []);
+
     useEffect(() => {
       if (isEditing && inputRef.current) {
         inputRef.current.focus();
@@ -1858,7 +1879,7 @@
     }, [isEditing]);
 
     return html`
-      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} onClick=${isEditing ? null : onClick}>
+      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} tabindex="0">
         <div class="session-card-name-row">
           <div class=${'session-card-name' + (shaking ? ' session-name-shake' : '')}>
             ${statusIcon}
