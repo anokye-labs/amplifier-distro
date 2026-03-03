@@ -2123,7 +2123,7 @@
           ${menuOpen && html`
             <${SessionOverflowMenu}
               isPinned=${isPinned}
-              canPin=${!!session.sessionId}
+              canPin=${!!session.sessionId && (session.turnCount || session.messageCount || 0) > 0}
               onPin=${() => onTogglePin(session.sessionId, isPinned)}
               onRename=${(e) => startEditing(e)}
               onClose=${() => setMenuOpen(false)}
