@@ -214,6 +214,12 @@ class SessionEventTranslator:
                     "parent_tool_call_id": parent_tool_call_id,
                 }
 
+            case "execution:start":
+                return {"type": "execution_start"}
+
+            case "execution:end":
+                return {"type": "execution_end"}
+
             case "orchestrator:complete":
                 self.reset()
                 return {
