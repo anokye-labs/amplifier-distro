@@ -30,6 +30,13 @@ logger = logging.getLogger(__name__)
 
 _AUTH_TIMEOUT_S = 30.0
 
+# Application-level heartbeat interval (seconds). Keeps the WebSocket
+# alive through reverse proxies that track application-layer data frames
+# rather than transport-level pings. Without this, proxies with idle
+# timeouts (nginx: 75s, ALB: 60s, Cloudflare: 100s) may kill the
+# connection during long tool executions that produce no events.
+_HEARTBEAT_INTERVAL_S = 15.0
+
 # Maximum event queue depth — bounds memory if the WebSocket consumer is slow
 _EVENT_QUEUE_MAX_SIZE = 10000
 
@@ -89,6 +96,7 @@ class ChatConnection:
         fanout_task = asyncio.create_task(
             self._event_fanout_loop(), name="event_fanout_loop"
         )
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop(), name="heartbeat")
         _active_connections.add(self)
         try:
             await self._receive_loop()
@@ -98,6 +106,10 @@ class ChatConnection:
             logger.warning("ChatConnection receive error", exc_info=True)
         finally:
             _active_connections.discard(self)
+            # Stop heartbeat first (it sends to WS which may be dead)
+            heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
             # Cancel non-execution tasks only. The active execution is
             # intentionally left running server-side so it can finish and
             # persist its transcript. When the user reconnects, the event
@@ -153,6 +165,25 @@ class ChatConnection:
         get_unregister = getattr(self._backend, "get_hook_unregister", None)
         if get_unregister is not None:
             self._hook_unregister = get_unregister(session_id)
+
+    async def _heartbeat_loop(self) -> None:
+        """Send periodic application-level heartbeats.
+
+        Keeps the WebSocket alive through proxies that may ignore
+        protocol-level WebSocket PINGs and track only application data.
+        Runs as a background task alongside the receive and fanout loops.
+        """
+        try:
+            while True:
+                await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
+                try:
+                    await self._ws.send_json({"type": "heartbeat"})
+                except WebSocketDisconnect:
+                    break
+                except Exception:  # noqa: BLE001
+                    break
+        except asyncio.CancelledError:
+            pass
 
     async def _auth_handshake(self) -> None:
         """Validate auth token if api_key is configured.
