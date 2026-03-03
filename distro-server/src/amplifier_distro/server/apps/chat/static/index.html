@@ -327,6 +327,7 @@
     .session-card.active { border-left-color: var(--accent-blue); background: var(--bg-tertiary); }
 
     .session-card-name { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+    .session-card-name.auto-named { color: var(--text-secondary); }
     .session-card-cwd { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .session-card-cwd-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .session-card-line-text { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1881,7 +1882,7 @@
     return html`
       <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} tabindex="0">
         <div class="session-card-name-row">
-          <div class=${'session-card-name' + (shaking ? ' session-name-shake' : '')}>
+          <div class=${'session-card-name' + (!session.name ? ' auto-named' : '') + (shaking ? ' session-name-shake' : '')}>
             ${statusIcon}
             ${isEditing
               ? html`<input
