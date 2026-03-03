@@ -332,6 +332,21 @@ class MemoryService:
         logger.info("Stored memory %s (category: %s)", mem_id, category)
         return entry.model_dump()
 
+    def stats(self) -> dict[str, Any]:
+        """Return aggregate memory statistics without loading full content.
+
+        Returns:
+            Dict with memory_count and per-category breakdown.
+        """
+        store = self._load_store()
+        by_category: dict[str, int] = {}
+        for m in store.memories:
+            by_category[m.category] = by_category.get(m.category, 0) + 1
+        return {
+            "count": len(store.memories),
+            "by_category": by_category,
+        }
+
     def recall(self, query: str) -> list[dict[str, Any]]:
         """Search memories by content, tags, and category.
 
