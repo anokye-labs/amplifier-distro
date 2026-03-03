@@ -111,16 +111,23 @@ class ChatConnection:
             non_exec = [t for t in self._tasks if t is not self._active_execution]
             if non_exec:
                 await asyncio.gather(*non_exec, return_exceptions=True)
-            # Stop the fanout loop and wait for it to finish
-            fanout_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await fanout_task
+            # Stop the fanout loop gracefully via sentinel first, then
+            # force-cancel as fallback. Using put_nowait avoids blocking
+            # if the queue is full (which happens when the fanout died
+            # mid-execution and events piled up).
+            with contextlib.suppress(asyncio.QueueFull):
+                self.event_queue.put_nowait(_STOP)
+            try:
+                await asyncio.wait_for(asyncio.shield(fanout_task), timeout=2.0)
+            except (TimeoutError, asyncio.CancelledError):
+                fanout_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await fanout_task
             # Do NOT call _cleanup_hook() here. Hooks are intentionally left
             # registered so the still-running execution's events can be
             # redirected to the new queue via QueueHolder swap on reconnect.
             # _cleanup_hook() is still called from _dispatch_command (bundle/cwd)
             # for explicit session replacement.
-            await self.event_queue.put(_STOP)
 
     def _cleanup_hook(self) -> None:
         """Unregister the hook if one is registered. Always safe to call.
