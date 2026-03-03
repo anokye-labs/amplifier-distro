@@ -86,7 +86,7 @@ class _SessionHandle:
         """Request cancellation of the running session.
 
         Maps the string ``level`` to the ``immediate`` bool expected by
-        the Rust coordinator binding (``request_cancel(immediate=bool)``).
+        the coordinator's ``request_cancel(immediate: bool)`` signature.
         Previously, passing the raw string "graceful" was truthy in Python
         (``bool("graceful") == True``), making all cancels immediate.
         """
