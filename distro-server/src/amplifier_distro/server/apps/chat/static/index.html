@@ -2721,7 +2721,7 @@
           applySessionForkLineage(msg);
         }
 
-        if (msg.type !== 'auth_ok' && msg.type !== 'pong' && msg.type !== 'prompt_complete') {
+        if (msg.type !== 'auth_ok' && msg.type !== 'pong' && msg.type !== 'prompt_complete' && msg.type !== 'heartbeat') {
           const queued = pendingEventsRef.current.get(ownerKey) || [];
           queued.push(msg);
           pendingEventsRef.current.set(ownerKey, queued);
