@@ -2532,6 +2532,7 @@
     const dragStateRef = useRef(null);
     // Accumulates token usage across LLM calls within a single turn
     const turnTokensRef = useRef(null);
+    const placeholderIdRef = useRef(null);
     const revisionPollInFlightRef = useRef(false);
     const historySyncInFlightRef = useRef(false);
     const historyDiscoverInFlightRef = useRef(false);
@@ -2867,7 +2868,35 @@
           break;
         }
 
+        case 'execution_start':
+          setSessions(prev => {
+            const next = new Map(prev);
+            const s = next.get(ownerKey) || {};
+            next.set(ownerKey, { ...s, status: 'running' });
+            return next;
+          });
+          break;
+
+        case 'execution_end':
+          setSessions(prev => {
+            const next = new Map(prev);
+            const s = next.get(ownerKey) || {};
+            next.set(ownerKey, {
+              ...s,
+              status: s.source === 'history' ? 'history' : 'idle',
+            });
+            return next;
+          });
+          break;
+
         case 'content_start':
+          // Remove client-side placeholder if present
+          const placeholderId = placeholderIdRef.current;
+          if (placeholderId) {
+            setChronoItems(prev => prev.filter(item => item.id !== placeholderId));
+            placeholderIdRef.current = null;
+          }
+
           if (msg.block_type === 'text') {
             const itemId = makeId();
             const localIdx = getLocalIndex(msg.index);
@@ -2984,6 +3013,13 @@
         }
 
         case 'tool_call': {
+          // Remove client-side placeholder if tool call comes before content
+          const placeholderId = placeholderIdRef.current;
+          if (placeholderId) {
+            setChronoItems(prev => prev.filter(item => item.id !== placeholderId));
+            placeholderIdRef.current = null;
+          }
+
           const itemId = makeId();
           const originSessionId = typeof msg.session_id === 'string' ? msg.session_id : null;
           const originParentId = typeof msg.parent_id === 'string' ? msg.parent_id : null;
@@ -3097,6 +3133,13 @@
           break;
 
         case 'execution_error':
+          // Remove client-side placeholder if error occurs immediately
+          const placeholderId = placeholderIdRef.current;
+          if (placeholderId) {
+            setChronoItems(prev => prev.filter(item => item.id !== placeholderId));
+            placeholderIdRef.current = null;
+          }
+
           setSessions(prev => {
             const next = new Map(prev);
             const s = next.get(ownerKey) || {};
@@ -3644,6 +3687,18 @@
         id: makeId(), type: 'text', role: 'user',
         content, streaming: false, order: orderCounterRef.current++,
       }]);
+
+      // Add client-side placeholder for immediate feedback
+      const placeholderId = makeId();
+      placeholderIdRef.current = placeholderId;
+      setChronoItems(prev => [...prev, {
+        id: placeholderId,
+        type: 'thinking',
+        content: '',
+        streaming: true,
+        order: orderCounterRef.current++,
+      }]);
+
       setExecuting(true);
       const nowIso = new Date().toISOString();
       setSessions(prev => {
@@ -3727,6 +3782,7 @@
       setTurnCount(0);
       setExecuting(false);
       setPendingApproval(null);
+      placeholderIdRef.current = null;
       setSessionId(null);
       setCwd(requestedCwd);
       setWsStatus('connecting');
@@ -4088,6 +4144,7 @@
       setTurnCount(target.savedTurnCount || 0);
       setExecuting(target.status === 'running');
       setPendingApproval(null);
+      placeholderIdRef.current = null;
       setSessionId(target.sessionId || null);
       setCwd(target.cwd || '~');
       if (target.ws && target.ws.readyState === WebSocket.OPEN) {
