@@ -110,8 +110,12 @@ class TranscriptSaveHook:
 
             # Offload synchronous file I/O (mkdir, atomic_write with fsync)
             # to a thread so the event loop stays responsive for pings,
-            # WebSocket frames, and event dispatch.
-            await asyncio.to_thread(write_transcript, self._session_dir, messages)
+            # WebSocket frames, and event dispatch.  Snapshot the list to
+            # prevent a data race if the orchestrator appends to context
+            # while the thread iterates.
+            await asyncio.to_thread(
+                write_transcript, self._session_dir, list(messages)
+            )
             self._last_count = count  # update only after successful write
 
         except Exception:  # noqa: BLE001
