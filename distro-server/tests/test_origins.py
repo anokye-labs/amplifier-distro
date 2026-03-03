@@ -100,3 +100,7 @@ class TestIsOriginAllowed:
     def test_custom_proxy_origin_allowed(self):
         allowed = {"localhost", "127.0.0.1", "https://my-proxy.example.com"}
         assert is_origin_allowed("https://my-proxy.example.com/path", allowed) is True
+
+    def test_empty_origin_rejected(self):
+        allowed = {"localhost", "127.0.0.1"}
+        assert is_origin_allowed("", allowed) is False

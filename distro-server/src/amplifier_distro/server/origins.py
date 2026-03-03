@@ -35,15 +35,8 @@ def build_allowed_origins(extra: list[str] | None = None) -> list[str]:
     if extra:
         origins.extend(extra)
 
-    # Deduplicate preserving order
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for entry in origins:
-        if entry not in seen:
-            seen.add(entry)
-            deduped.append(entry)
-
-    return deduped
+    # Deduplicate preserving insertion order
+    return list(dict.fromkeys(origins))
 
 
 def is_origin_allowed(origin: str | None, allowed: set[str]) -> bool:
@@ -55,4 +48,5 @@ def is_origin_allowed(origin: str | None, allowed: set[str]) -> bool:
     """
     if origin is None:
         return True
+    # Substring match is intentional — entries are host fragments, not full URLs.
     return any(entry in origin for entry in allowed)
