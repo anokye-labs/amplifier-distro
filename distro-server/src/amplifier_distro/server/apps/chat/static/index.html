@@ -341,7 +341,9 @@
       min-width: 44px; min-height: 44px; flex-shrink: 0;
     }
     .session-card:hover .session-rename-trigger,
-    .session-card.active .session-rename-trigger { opacity: 1; }
+    .session-card.active .session-rename-trigger,
+    .session-card:focus .session-rename-trigger,
+    .session-card:focus-within .session-rename-trigger { opacity: 1; }
     .session-rename-trigger:hover { color: var(--accent-blue); }
     .session-name-input {
       font-size: 12px; font-weight: 500; color: var(--text-primary);
@@ -1864,16 +1866,31 @@
     }, [isEditing, startEditing]);
 
     const handleTouchStart = useCallback((e) => {
+      // Suppress native long-press behaviour (browser context menu, iOS text-selection
+      // handles) so our custom 500 ms handler is the only thing that fires.
+      e.preventDefault();
       longPressTimerRef.current = setTimeout(() => {
         longPressTimerRef.current = null;
         startEditing(null);
       }, 500);
     }, [startEditing]);
     const handleTouchEnd = useCallback(() => {
-      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-    }, []);
+      if (longPressTimerRef.current) {
+        // Short tap: cancel the long-press timer and manually fire the click
+        // action, because e.preventDefault() on touchstart stops the browser
+        // from synthesising a click event.
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+        if (!isEditing && onClick) onClick();
+      }
+    }, [isEditing, onClick]);
     const handleTouchMove = useCallback(() => {
       if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    }, []);
+    // Suppress the browser's native context menu on right-click / long-press
+    // (belt-and-suspenders alongside the touchstart preventDefault).
+    const handleContextMenu = useCallback((e) => {
+      e.preventDefault();
     }, []);
 
     useEffect(() => {
@@ -1884,7 +1901,7 @@
     }, [isEditing]);
 
     return html`
-      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} tabindex="0">
+      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} onContextMenu=${handleContextMenu} tabindex="0">
         <div class="session-card-name-row">
           <div class=${'session-card-name' + (!session.name ? ' auto-named' : '') + (shaking ? ' session-name-shake' : '')}>
             ${statusIcon}
