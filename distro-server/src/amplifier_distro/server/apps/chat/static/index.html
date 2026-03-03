@@ -1089,6 +1089,76 @@
       font-weight: 400;
       opacity: 0.7;
     }
+    /* Overflow menu trigger and pin icon */
+    .session-card-actions {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+    .session-card:hover .session-card-actions,
+    .session-card-actions:focus-within,
+    .session-card-actions.menu-open {
+      opacity: 1;
+    }
+    @media (hover: none), (pointer: coarse) {
+      .session-card-actions { opacity: 0.5; }
+    }
+    .session-card-action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      min-width: 44px;
+      min-height: 44px;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 0;
+      font-size: 16px;
+    }
+    .session-card-action-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    /* Dropdown */
+    .session-overflow-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 160px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      padding: 4px 0;
+    }
+    .session-overflow-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      background: none;
+      color: var(--text-primary);
+      cursor: pointer;
+      text-align: left;
+      font-size: 13px;
+    }
+    .session-overflow-item:hover {
+      background: var(--bg-tertiary);
+    }
+    /* Ensure session-card is position relative */
+    .session-card { position: relative; }
   </style>
 </head>
 <body>
@@ -1800,16 +1870,36 @@
     `;
   }
 
-  function SessionCard({ session, isActive, onClick, setSessions }) {
+  function SessionOverflowMenu({ isPinned, onPin, onClose }) {
+    const menuRef = useRef(null);
+    useEffect(() => {
+      function handleClickOutside(e) {
+        if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+      }
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onClose]);
+
+    return html`
+      <div class="session-overflow-menu" ref=${menuRef} role="menu" aria-label="Session actions">
+        <button class="session-overflow-item" role="menuitem"
+          onClick=${(e) => { e.stopPropagation(); onPin(); onClose(); }}>
+          ${isPinned ? 'Unpin' : 'Pin to top'}
+        </button>
+      </div>
+    `;
+  }
+
+  function SessionCard({ session, isActive, onClick, setSessions, onTogglePin, isPinned }) {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState('');
     const [shaking, setShaking] = useState(false);
     const [saved, setSaved] = useState(false);
     const [announcement, setAnnouncement] = useState('');
+    const [menuOpen, setMenuOpen] = useState(false);
     const inputRef = useRef(null);
     const originalNameRef = useRef('');
     const longPressTimerRef = useRef(null);
-
     const statusIcon =
       session.status === 'running' ? '⟳ ' :
       session.status === 'connecting' ? '◌ ' :
@@ -1948,7 +2038,7 @@
     }, [isEditing]);
 
     return html`
-      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} onContextMenu=${handleContextMenu} tabindex="0">
+      <div class=${'session-card' + (isActive ? ' active' : '') + (isEditing ? ' session-name-editing' : '') + (saved ? ' session-name-saved' : '')} data-session-id=${session.sessionId} onClick=${isEditing ? null : onClick} onKeyDown=${handleCardKeyDown} onTouchStart=${handleTouchStart} onTouchEnd=${handleTouchEnd} onTouchMove=${handleTouchMove} onContextMenu=${handleContextMenu} tabindex="0">
         <div class="session-card-name-row">
           <div class=${'session-card-name' + (!session.name ? ' auto-named' : '') + (shaking ? ' session-name-shake' : '')}>
             ${statusIcon}
@@ -1978,6 +2068,24 @@
                 aria-label="Rename session"
               >✏</button>`
           }
+        </div>
+        <div class=${'session-card-actions' + (menuOpen ? ' menu-open' : '')}>
+          ${isPinned && html`
+            <button class="session-card-action-btn" title="Unpin" aria-label="Unpin session"
+              onClick=${(e) => { e.stopPropagation(); onTogglePin(session.sessionId, true); }}
+            >${'\u{1F4CC}'}</button>
+          `}
+          <button class="session-card-action-btn" title="More actions" aria-label="Session actions"
+            aria-haspopup="menu"
+            onClick=${(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+          >${'\u22EE'}</button>
+          ${menuOpen && html`
+            <${SessionOverflowMenu}
+              isPinned=${isPinned}
+              onPin=${() => onTogglePin(session.sessionId, isPinned)}
+              onClose=${() => setMenuOpen(false)}
+            />
+          `}
         </div>
         <div class="session-card-cwd session-card-cwd-row" title=${session.cwd || '~'}>
           <${Icon} name="folder" className="sm" />
@@ -4067,6 +4175,8 @@
                 isActive=${key === activeKey}
                 onClick=${() => switchSession(key)}
                 setSessions=${setSessions}
+                onTogglePin=${handleTogglePin}
+                isPinned=${!!(session && session.sessionId && pinnedSessionIds.has(session.sessionId))}
               />
             </div>
           </div>
