@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -647,6 +648,68 @@ class TestExecutionSurvivesDisconnect:
 	        await conn.run()
 
 	        backend.cancel_session.assert_awaited_once()
+
+
+class TestHeartbeat:
+    """Tests for application-level heartbeat (BUG-4, issue #62)."""
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_constant_exists(self):
+        """_HEARTBEAT_INTERVAL_S must be defined and reasonable."""
+        from amplifier_distro.server.apps.chat.connection import _HEARTBEAT_INTERVAL_S
+
+        assert 5 <= _HEARTBEAT_INTERVAL_S <= 60
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_loop_sends_messages(self):
+        """_heartbeat_loop must send heartbeat messages periodically."""
+        from amplifier_distro.server.apps.chat.connection import ChatConnection
+
+        ws = make_ws([])
+        backend = make_backend()
+        config = make_config()
+        conn = ChatConnection(ws, backend, config)
+
+        # Run heartbeat with a very short interval for testing
+        import amplifier_distro.server.apps.chat.connection as conn_mod
+
+        original = conn_mod._HEARTBEAT_INTERVAL_S
+        conn_mod._HEARTBEAT_INTERVAL_S = 0.01  # 10ms for fast test
+        try:
+            task = asyncio.create_task(conn._heartbeat_loop())
+            await asyncio.sleep(0.05)  # let a few heartbeats fire
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        finally:
+            conn_mod._HEARTBEAT_INTERVAL_S = original
+
+        sent = [call.args[0] for call in ws.send_json.await_args_list]
+        heartbeats = [m for m in sent if m.get("type") == "heartbeat"]
+        assert len(heartbeats) >= 1, "Must send at least 1 heartbeat"
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_stops_on_disconnect(self):
+        """Heartbeat loop must exit cleanly when WS disconnects."""
+        from starlette.websockets import WebSocketDisconnect
+
+        from amplifier_distro.server.apps.chat.connection import ChatConnection
+
+        ws = make_ws([])
+        ws.send_json = AsyncMock(side_effect=WebSocketDisconnect(code=1000))
+        backend = make_backend()
+        config = make_config()
+        conn = ChatConnection(ws, backend, config)
+
+        import amplifier_distro.server.apps.chat.connection as conn_mod
+
+        original = conn_mod._HEARTBEAT_INTERVAL_S
+        conn_mod._HEARTBEAT_INTERVAL_S = 0.01
+        try:
+            # Should exit cleanly, not raise
+            await asyncio.wait_for(conn._heartbeat_loop(), timeout=1.0)
+        finally:
+            conn_mod._HEARTBEAT_INTERVAL_S = original
 
 
 class TestEventQueueBounded:
