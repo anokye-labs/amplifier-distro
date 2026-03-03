@@ -58,6 +58,66 @@ class TestChatIndexEndpoint:
         assert "Amplifier" in r.text
 
 
+class TestChatIndexWorkspaceInjection:
+    """Test that workspace_root from settings is injected into HTML to prevent race condition."""
+
+    def test_index_injects_workspace_root_from_settings(self, chat_client, monkeypatch):
+        """Workspace root from distro_settings is injected into HTML as script tag."""
+        from unittest.mock import MagicMock
+
+        # Mock load_distro_settings to return controlled workspace_root
+        mock_settings = MagicMock()
+        mock_settings.workspace_root = "/custom/workspace/path"
+
+        monkeypatch.setattr(
+            "amplifier_distro.server.apps.chat.load_distro_settings",
+            lambda: mock_settings,
+        )
+
+        r = chat_client.get("/apps/chat/")
+        assert r.status_code == 200
+
+        # Verify the injected script contains the workspace_root
+        assert 'window.__AMPLIFIER_WORKSPACE_ROOT = "/custom/workspace/path"' in r.text
+
+    def test_index_defaults_to_tilde_when_workspace_root_is_none(
+        self, chat_client, monkeypatch
+    ):
+        """When workspace_root is None, defaults to '~'."""
+        from unittest.mock import MagicMock
+
+        mock_settings = MagicMock()
+        mock_settings.workspace_root = None
+
+        monkeypatch.setattr(
+            "amplifier_distro.server.apps.chat.load_distro_settings",
+            lambda: mock_settings,
+        )
+
+        r = chat_client.get("/apps/chat/")
+        assert r.status_code == 200
+        assert 'window.__AMPLIFIER_WORKSPACE_ROOT = "~"' in r.text
+
+    def test_index_safely_escapes_workspace_root_in_json(
+        self, chat_client, monkeypatch
+    ):
+        """Workspace root with special chars is safely JSON-escaped."""
+        from unittest.mock import MagicMock
+
+        mock_settings = MagicMock()
+        mock_settings.workspace_root = '/path/with"quotes'
+
+        monkeypatch.setattr(
+            "amplifier_distro.server.apps.chat.load_distro_settings",
+            lambda: mock_settings,
+        )
+
+        r = chat_client.get("/apps/chat/")
+        assert r.status_code == 200
+        # json.dumps escapes quotes as \"
+        assert 'window.__AMPLIFIER_WORKSPACE_ROOT = "/path/with\\"quotes"' in r.text
+
+
 class TestChatHealthEndpoint:
     def test_health_returns_ok(self, chat_client):
         r = chat_client.get("/apps/chat/api/health")

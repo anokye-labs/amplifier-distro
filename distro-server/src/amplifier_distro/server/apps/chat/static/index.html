@@ -2524,7 +2524,8 @@
     const sessionsRef = useRef(new Map());
     const chronoItemsRef = useRef([]);
     const turnCountRef = useRef(0);
-    const defaultCwdRef = useRef('~');
+    // Read workspace_root from server-injected value (eliminates race condition)
+    const defaultCwdRef = useRef(window.__AMPLIFIER_WORKSPACE_ROOT || '~');
     const draftCwdSyncKeyRef = useRef(null);
     const pendingEventsRef = useRef(new Map());
     const historyResumeTokenRef = useRef(0);
