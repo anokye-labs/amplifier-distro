@@ -1095,7 +1095,7 @@
       opacity: 1;
     }
     @media (hover: none), (pointer: coarse) {
-      .session-card-actions { opacity: 0.5; }
+      .session-card-actions { opacity: 0.7; }
     }
     .session-card-action-btn {
       display: inline-flex;
@@ -1125,7 +1125,7 @@
       margin-top: 4px;
       min-width: 160px;
       background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
+      border: 1px solid var(--border);
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       z-index: 100;
@@ -1137,6 +1137,7 @@
       gap: 8px;
       width: 100%;
       padding: 8px 12px;
+      min-height: 44px;
       border: none;
       background: none;
       color: var(--text-primary);
@@ -1627,6 +1628,10 @@
         return html`<svg class=${cls} viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"></path></svg>`;
       case 'refresh':
         return html`<svg class=${cls} viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3v6h-6"></path></svg>`;
+      case 'pin':
+        return html`<svg class=${cls} viewBox="0 0 24 24"><path d="M12 17v5"></path><path d="M9 11V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7"></path><path d="M5 17h14"></path><path d="M7 11l1.5 6h7L17 11"></path></svg>`;
+      case 'more-vertical':
+        return html`<svg class=${cls} viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
       default:
         return null;
     }
@@ -1907,7 +1912,11 @@
         if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
       }
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+      };
     }, [onClose]);
 
     return html`
@@ -2073,12 +2082,12 @@
           ${isPinned && html`
             <button class="session-card-action-btn" title="Unpin" aria-label="Unpin session"
               onClick=${(e) => { e.stopPropagation(); onTogglePin(session.sessionId, true); }}
-            >${'\u{1F4CC}'}</button>
+            ><${Icon} name="pin" className="sm" /></button>
           `}
           <button class="session-card-action-btn" title="More actions" aria-label="Session actions"
             aria-haspopup="menu"
             onClick=${(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
-          >${'\u22EE'}</button>
+          ><${Icon} name="more-vertical" className="sm" /></button>
           ${menuOpen && html`
             <${SessionOverflowMenu}
               isPinned=${isPinned}
