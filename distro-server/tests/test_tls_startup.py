@@ -396,3 +396,40 @@ class TestTailscaleServeSkipsNativeTLS:
         # Should echo about tailscale providing HTTPS
         all_output = "\n".join(foreground_env.echo_calls)
         assert "Tailscale" in all_output or "tailscale" in all_output.lower()
+
+    def test_tailscale_url_shown_prominently_with_default_tls_off(
+        self, foreground_env
+    ) -> None:
+        """When Tailscale is active with default tls_mode='off', the green HTTPS
+        confirmation must always appear — not be gated behind tls_mode != 'off'.
+
+        This is the regression test for the bug where the prominent green block
+        was hidden from users who never passed --tls (the vast majority).
+        """
+        from unittest.mock import patch
+
+        from amplifier_distro.server.cli import _run_foreground
+
+        with patch(
+            "amplifier_distro.server.cli._setup_tailscale",
+            return_value="https://monad.tail09557f.ts.net",
+        ):
+            _run_foreground(
+                host="127.0.0.1",
+                port=8080,
+                apps_dir=None,
+                reload=False,
+                dev=True,
+                tls_mode="off",  # default — the bug case
+            )
+
+        all_output = "\n".join(foreground_env.echo_calls)
+        # The prominent green confirmation must appear regardless of tls_mode
+        assert "✓ HTTPS provided by Tailscale" in all_output, (
+            "Tailscale HTTPS confirmation should be shown even with tls_mode='off'. "
+            f"Actual output:\n{all_output}"
+        )
+        # And the URL itself must appear
+        assert "https://monad.tail09557f.ts.net" in all_output, (
+            "Tailscale HTTPS URL should always be shown in startup output"
+        )

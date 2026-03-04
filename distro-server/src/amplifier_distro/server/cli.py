@@ -493,10 +493,13 @@ def _run_foreground(
     # uvicorn would expect TLS, causing 502 Bad Gateway errors.
     ssl_kwargs: dict[str, Any] = {}
     if ts_url:
-        # Tailscale serve is active as reverse proxy — native TLS not needed
-        if tls_mode != "off":
-            click.echo(click.style("  ✓ HTTPS provided by Tailscale serve", fg="green"))
-            click.echo(f"    {ts_url}")
+        # Tailscale serve is active as reverse proxy — native TLS not needed.
+        # Always show the prominent green block so users can copy the URL to
+        # their phone / other devices regardless of whether --tls was passed.
+        click.echo("")
+        click.echo(click.style("  ✓ HTTPS provided by Tailscale", fg="green"))
+        click.echo(f"    {ts_url}")
+        click.echo("")
         scheme = "https"
     else:
         # No tailscale serve — resolve certs for native TLS if requested
