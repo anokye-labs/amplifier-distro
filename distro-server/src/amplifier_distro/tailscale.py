@@ -10,6 +10,7 @@ import contextlib
 import json
 import logging
 import subprocess
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,12 @@ def get_dns_name() -> str | None:
         dns = data.get("Self", {}).get("DNSName", "").rstrip(".")
         return dns or None
 
-    except (FileNotFoundError, PermissionError, subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (
+        FileNotFoundError,
+        PermissionError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ):
         return None
 
 
@@ -75,6 +81,48 @@ def start_serve(port: int) -> str | None:
 
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         logger.debug("tailscale serve unavailable: %s", exc)
+        return None
+
+
+def provision_cert(cert_dir: Path) -> tuple[Path, Path] | None:
+    """Provision a TLS certificate via ``tailscale cert``.
+
+    Returns ``(cert_path, key_path)`` on success, or ``None`` on any failure.
+    Creates *cert_dir* if it does not exist.  Failures are logged but never
+    raise.
+    """
+    dns_name = get_dns_name()
+    if dns_name is None:
+        return None
+
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    cert_file = cert_dir / f"{dns_name}.crt"
+    key_file = cert_dir / f"{dns_name}.key"
+
+    try:
+        result = subprocess.run(
+            [
+                "tailscale",
+                "cert",
+                "--cert-file",
+                str(cert_file),
+                "--key-file",
+                str(key_file),
+                dns_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logger.warning("tailscale cert failed: %s", result.stderr.strip())
+            return None
+
+        return (cert_file, key_file)
+
+    except subprocess.TimeoutExpired:
+        logger.debug("tailscale cert timed out")
         return None
 
 

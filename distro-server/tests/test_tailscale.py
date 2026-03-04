@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 from amplifier_distro import tailscale
@@ -211,6 +212,101 @@ class TestStopServe:
             side_effect=subprocess.TimeoutExpired(cmd="tailscale", timeout=10),
         ):
             tailscale.stop_serve()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# provision_cert
+# ---------------------------------------------------------------------------
+
+
+class TestProvisionCert:
+    """Tests for provision_cert()."""
+
+    def test_returns_cert_paths_on_success(self, tmp_path: Path):
+        cert_dir = tmp_path / "certs"
+        cert_dir.mkdir()
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout="", stderr=""
+                ),
+            ) as mock_run,
+        ):
+            result = tailscale.provision_cert(cert_dir)
+            assert result == (cert_dir / "box.ts.net.crt", cert_dir / "box.ts.net.key")
+            mock_run.assert_called_once_with(
+                [
+                    "tailscale",
+                    "cert",
+                    "--cert-file",
+                    str(cert_dir / "box.ts.net.crt"),
+                    "--key-file",
+                    str(cert_dir / "box.ts.net.key"),
+                    "box.ts.net",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+    def test_returns_none_when_no_tailscale(self):
+        with patch("amplifier_distro.tailscale.get_dns_name", return_value=None):
+            assert tailscale.provision_cert(Path("/tmp/certs")) is None
+
+    def test_returns_none_on_cert_failure(self, tmp_path: Path):
+        cert_dir = tmp_path / "certs"
+        cert_dir.mkdir()
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], returncode=1, stdout="", stderr="cert error"
+                ),
+            ),
+        ):
+            assert tailscale.provision_cert(cert_dir) is None
+
+    def test_returns_none_on_timeout(self, tmp_path: Path):
+        cert_dir = tmp_path / "certs"
+        cert_dir.mkdir()
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd="tailscale", timeout=30),
+            ),
+        ):
+            assert tailscale.provision_cert(cert_dir) is None
+
+    def test_creates_cert_dir_if_missing(self, tmp_path: Path):
+        cert_dir = tmp_path / "new" / "certs"
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout="", stderr=""
+                ),
+            ),
+        ):
+            result = tailscale.provision_cert(cert_dir)
+            assert cert_dir.is_dir()
+            assert result == (cert_dir / "box.ts.net.crt", cert_dir / "box.ts.net.key")
 
 
 # ---------------------------------------------------------------------------
