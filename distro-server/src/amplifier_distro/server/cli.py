@@ -482,7 +482,30 @@ def _run_foreground(
     services = init_services(dev_mode=dev)
     click.echo(f"Services: backend={type(services.backend).__name__}")
 
-    server = create_server(dev_mode=dev, host=host)
+    # TLS certificate resolution (needed before auth setup)
+    from amplifier_distro.server.tls import resolve_cert
+
+    ssl_kwargs: dict[str, Any] = {}
+    tls_pair = resolve_cert(mode=tls_mode, certfile=ssl_certfile, keyfile=ssl_keyfile)
+    if tls_pair is not None:
+        cert_path, key_path = tls_pair
+        ssl_kwargs["ssl_certfile"] = str(cert_path)
+        ssl_kwargs["ssl_keyfile"] = str(key_path)
+
+    # Auth setup (conditional: TLS + Linux + enabled)
+    from amplifier_distro.distro_settings import load as load_settings
+    from amplifier_distro.server.auth import get_or_create_secret, is_auth_applicable
+
+    settings = load_settings()
+    auth_secret = ""
+    if tls_pair is not None and is_auth_applicable(
+        tls_active=True,
+        auth_enabled=settings.server.auth.enabled,
+    ):
+        auth_secret = get_or_create_secret()
+        logger.info("PAM authentication enabled")
+
+    server = create_server(dev_mode=dev, host=host, auth_secret=auth_secret)
 
     # Auto-discover apps
     loaded_apps: list[str] = []
@@ -516,16 +539,6 @@ def _run_foreground(
 
     # Tailscale HTTPS: auto-detect and set up reverse proxy
     ts_url = _setup_tailscale(port)
-
-    # TLS certificate resolution
-    from amplifier_distro.server.tls import resolve_cert
-
-    ssl_kwargs: dict[str, Any] = {}
-    tls_pair = resolve_cert(mode=tls_mode, certfile=ssl_certfile, keyfile=ssl_keyfile)
-    if tls_pair is not None:
-        cert_path, key_path = tls_pair
-        ssl_kwargs["ssl_certfile"] = str(cert_path)
-        ssl_kwargs["ssl_keyfile"] = str(key_path)
 
     scheme = "https" if ssl_kwargs else "http"
 

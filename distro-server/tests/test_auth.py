@@ -342,3 +342,29 @@ class TestLogoutRoute:
         assert "amplifier_session" in set_cookie
         cookie_lower = set_cookie.lower()
         assert "max-age=0" in cookie_lower or "01 jan 1970" in cookie_lower
+
+
+class TestAuthWiringConditional:
+    """Auth is only wired when TLS is active on Linux."""
+
+    def test_no_auth_middleware_when_no_secret(self):
+        """Default server (no auth_secret) has no auth middleware."""
+        from amplifier_distro.server.app import DistroServer
+
+        server = DistroServer()
+        middleware_types = [str(m) for m in server.app.user_middleware]
+        assert "AuthMiddleware" not in str(middleware_types)
+
+    def test_login_route_exists_when_auth_enabled(self):
+        from amplifier_distro.server.app import DistroServer
+
+        server = DistroServer(auth_secret="test-secret")
+        route_paths = [getattr(r, "path", None) for r in server.app.routes]
+        assert "/login" in route_paths
+
+    def test_no_login_route_when_no_secret(self):
+        from amplifier_distro.server.app import DistroServer
+
+        server = DistroServer(auth_secret="")
+        route_paths = [getattr(r, "path", None) for r in server.app.routes]
+        assert "/login" not in route_paths
