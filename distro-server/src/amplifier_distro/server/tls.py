@@ -1,8 +1,11 @@
-"""Self-signed TLS certificate generation for amplifier-distro.
+"""TLS certificate generation and resolution for amplifier-distro.
 
 Generates a self-signed certificate for local HTTPS development.
 Primary path uses the ``openssl`` CLI; falls back to the ``cryptography``
 Python library when ``openssl`` is not available on the system PATH.
+
+The :func:`resolve_cert` entry-point selects a certificate based on the
+configured TLS *mode* (``off``, ``manual``, or ``auto``).
 """
 
 from __future__ import annotations
@@ -10,6 +13,8 @@ from __future__ import annotations
 import logging
 import subprocess
 from pathlib import Path
+
+from amplifier_distro import conventions, tailscale
 
 logger = logging.getLogger(__name__)
 
@@ -129,3 +134,52 @@ def _generate_via_cryptography(cert_path: Path, key_path: Path) -> bool:
 
     logger.debug("Generated self-signed cert via cryptography library")
     return True
+
+
+def resolve_cert(
+    mode: str = "off",
+    certfile: str = "",
+    keyfile: str = "",
+    cert_dir: Path | None = None,
+) -> tuple[Path, Path] | None:
+    """Resolve a TLS certificate pair based on the configured *mode*.
+
+    Returns ``(cert_path, key_path)`` or ``None`` when TLS is disabled or
+    certificate resolution fails.
+
+    Modes:
+
+    ``off``
+        TLS disabled — returns ``None``.
+    ``manual``
+        Use the provided *certfile* / *keyfile* paths.  Returns ``None``
+        with an error log if either file does not exist.
+    ``auto``
+        Try :func:`~amplifier_distro.tailscale.provision_cert` first; fall
+        back to :func:`generate_self_signed_cert` if Tailscale is
+        unavailable.
+    """
+    if mode == "off":
+        return None
+
+    if cert_dir is None:
+        cert_dir = Path(conventions.DISTRO_CERTS_DIR)
+
+    if mode == "manual":
+        cert_path = Path(certfile)
+        key_path = Path(keyfile)
+        if not cert_path.exists() or not key_path.exists():
+            logger.error(
+                "TLS cert/key not found: certfile=%s, keyfile=%s",
+                certfile,
+                keyfile,
+            )
+            return None
+        return cert_path, key_path
+
+    # mode == "auto"
+    result = tailscale.provision_cert(cert_dir)
+    if result is not None:
+        return result
+
+    return generate_self_signed_cert(cert_dir)

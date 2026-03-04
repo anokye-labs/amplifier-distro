@@ -1,4 +1,4 @@
-"""Tests for self-signed TLS certificate generation.
+"""Tests for TLS certificate generation and resolution.
 
 Validates:
 1. generate_self_signed_cert creates cert and key files
@@ -6,6 +6,7 @@ Validates:
 3. Cert is loadable by ssl.SSLContext.load_cert_chain
 4. Reuses existing cert (same mtime)
 5. Creates cert_dir if missing
+6. resolve_cert dispatches by mode (off, manual, auto)
 """
 
 from __future__ import annotations
@@ -13,8 +14,9 @@ from __future__ import annotations
 import os
 import ssl
 from pathlib import Path
+from unittest.mock import patch
 
-from amplifier_distro.server.tls import generate_self_signed_cert
+from amplifier_distro.server.tls import generate_self_signed_cert, resolve_cert
 
 
 class TestGenerateSelfSignedCert:
@@ -64,3 +66,101 @@ class TestGenerateSelfSignedCert:
         cert_path, key_path = generate_self_signed_cert(tmp_path)
         assert cert_path.parent == tmp_path
         assert key_path.parent == tmp_path
+
+
+# ---------------------------------------------------------------------------
+# resolve_cert
+# ---------------------------------------------------------------------------
+
+
+class TestResolveCert:
+    """Tests for resolve_cert() dispatch logic."""
+
+    # -- off mode --
+
+    def test_off_mode_returns_none(self) -> None:
+        result = resolve_cert(mode="off")
+        assert result is None
+
+    # -- manual mode --
+
+    def test_manual_returns_paths_if_they_exist(self, tmp_path: Path) -> None:
+        cert = tmp_path / "cert.pem"
+        key = tmp_path / "key.pem"
+        cert.write_text("cert")
+        key.write_text("key")
+
+        result = resolve_cert(mode="manual", certfile=str(cert), keyfile=str(key))
+        assert result == (cert, key)
+
+    def test_manual_returns_none_if_cert_missing(self, tmp_path: Path) -> None:
+        key = tmp_path / "key.pem"
+        key.write_text("key")
+        missing_cert = tmp_path / "no-cert.pem"
+
+        result = resolve_cert(
+            mode="manual", certfile=str(missing_cert), keyfile=str(key)
+        )
+        assert result is None
+
+    def test_manual_returns_none_if_key_missing(self, tmp_path: Path) -> None:
+        cert = tmp_path / "cert.pem"
+        cert.write_text("cert")
+        missing_key = tmp_path / "no-key.pem"
+
+        result = resolve_cert(
+            mode="manual", certfile=str(cert), keyfile=str(missing_key)
+        )
+        assert result is None
+
+    def test_manual_logs_error_when_cert_missing(self, tmp_path: Path) -> None:
+        key = tmp_path / "key.pem"
+        key.write_text("key")
+        missing_cert = tmp_path / "no-cert.pem"
+
+        with patch("amplifier_distro.server.tls.logger") as mock_logger:
+            resolve_cert(mode="manual", certfile=str(missing_cert), keyfile=str(key))
+            mock_logger.error.assert_called_once()
+
+    # -- auto mode --
+
+    def test_auto_tries_tailscale_first(self, tmp_path: Path) -> None:
+        ts_cert = tmp_path / "ts.crt"
+        ts_key = tmp_path / "ts.key"
+
+        with patch(
+            "amplifier_distro.server.tls.tailscale.provision_cert",
+            return_value=(ts_cert, ts_key),
+        ) as mock_ts:
+            result = resolve_cert(mode="auto", cert_dir=tmp_path)
+            assert result == (ts_cert, ts_key)
+            mock_ts.assert_called_once_with(tmp_path)
+
+    def test_auto_falls_back_to_self_signed(self, tmp_path: Path) -> None:
+        with patch(
+            "amplifier_distro.server.tls.tailscale.provision_cert",
+            return_value=None,
+        ):
+            result = resolve_cert(mode="auto", cert_dir=tmp_path)
+            assert result is not None
+            cert_path, key_path = result
+            assert cert_path.exists()
+            assert key_path.exists()
+
+    def test_auto_uses_default_cert_dir(self) -> None:
+        """When cert_dir is None, auto mode uses conventions.DISTRO_CERTS_DIR."""
+        ts_cert = Path("/tmp/ts.crt")
+        ts_key = Path("/tmp/ts.key")
+
+        with (
+            patch(
+                "amplifier_distro.server.tls.tailscale.provision_cert",
+                return_value=(ts_cert, ts_key),
+            ) as mock_ts,
+            patch(
+                "amplifier_distro.server.tls.conventions.DISTRO_CERTS_DIR",
+                "/tmp/test-certs",
+            ),
+        ):
+            resolve_cert(mode="auto")
+            mock_ts.assert_called_once_with(Path("/tmp/test-certs"))
