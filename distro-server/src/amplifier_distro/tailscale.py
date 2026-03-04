@@ -116,7 +116,27 @@ def provision_cert(cert_dir: Path) -> tuple[Path, Path] | None:
             timeout=30,
         )
         if result.returncode != 0:
-            logger.warning("tailscale cert failed: %s", result.stderr.strip())
+            stderr = result.stderr.strip()
+            logger.warning("tailscale cert failed: %s", stderr)
+            # Surface the fix prominently for the user
+            import click
+
+            click.echo("")
+            click.echo(
+                click.style(
+                    "  ⚠ Tailscale certificate provisioning failed",
+                    fg="yellow",
+                    bold=True,
+                )
+            )
+            if "operator" in stderr.lower() or "access denied" in stderr.lower():
+                click.echo(
+                    "  Fix: Run 'sudo tailscale set --operator=$USER'"
+                    " once, then restart."
+                )
+            else:
+                click.echo(f"  Detail: {stderr}")
+            click.echo("")
             return None
 
         return (cert_file, key_file)

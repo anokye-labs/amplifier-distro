@@ -178,8 +178,20 @@ def resolve_cert(
         return cert_path, key_path
 
     # mode == "auto"
-    result = tailscale.provision_cert(cert_dir)
-    if result is not None:
-        return result
+    import click
 
+    ts_result = tailscale.provision_cert(cert_dir)
+    if ts_result is not None:
+        click.echo(click.style("  ✓ Using Tailscale certificate for TLS", fg="green"))
+        return ts_result
+
+    # Fall back to self-signed
+    click.echo("")
+    click.echo(click.style("  ⚠ Using self-signed certificate", fg="yellow", bold=True))
+    click.echo("  Browsers will show a security warning on first visit.")
+    click.echo(
+        "  For trusted certs, install Tailscale and run:"
+        " sudo tailscale set --operator=$USER"
+    )
+    click.echo("")
     return generate_self_signed_cert(cert_dir)
