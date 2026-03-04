@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import socket
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -105,8 +106,6 @@ def serve(
     # --ssl-certfile implies manual TLS mode when tls_mode is still default
     if tls_mode == "off" and ssl_certfile:
         tls_mode = "manual"
-    if no_auth:
-        click.echo("Warning: --no-auth not yet implemented", err=True)
     if ctx.invoked_subcommand is None:
         _run_foreground(
             host,
@@ -119,6 +118,7 @@ def serve(
             tls_mode=tls_mode,
             ssl_certfile=ssl_certfile,
             ssl_keyfile=ssl_keyfile,
+            no_auth=no_auth,
         )
 
 
@@ -409,6 +409,7 @@ def _run_foreground(
     tls_mode: str = "off",
     ssl_certfile: str = "",
     ssl_keyfile: str = "",
+    no_auth: bool = False,
 ) -> None:
     """Run the server in the foreground."""
     import logging
@@ -524,9 +525,14 @@ def _run_foreground(
     settings = load_settings()
     auth_secret = ""
     tls_active = bool(ssl_kwargs) or bool(ts_url)
-    if tls_active and is_auth_applicable(
-        tls_active=True,
-        auth_enabled=settings.server.auth.enabled,
+    if (
+        not no_auth
+        and tls_active
+        and is_auth_applicable(
+            tls_active=True,
+            platform=sys.platform,
+            auth_enabled=settings.server.auth.enabled,
+        )
     ):
         auth_secret = get_or_create_secret()
         logger.info("PAM authentication enabled")

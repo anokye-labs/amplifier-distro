@@ -433,3 +433,76 @@ class TestTailscaleServeSkipsNativeTLS:
         assert "https://monad.tail09557f.ts.net" in all_output, (
             "Tailscale HTTPS URL should always be shown in startup output"
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests - auth secret wired correctly
+# ---------------------------------------------------------------------------
+
+
+class TestAuthSetup:
+    """Auth is activated when TLS + Linux platform conditions are met."""
+
+    def test_auth_secret_set_when_tls_active_on_linux(self, foreground_env) -> None:
+        """create_server must be called with a non-empty auth_secret when TLS is
+        active on Linux.  This catches the bug where platform was never passed
+        to is_auth_applicable() so it defaulted to None and auth was dead code.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from amplifier_distro.server.cli import _run_foreground
+
+        fake_cert = foreground_env.tmp_path / "cert.pem"
+        fake_key = foreground_env.tmp_path / "key.pem"
+        fake_cert.write_text("cert")
+        fake_key.write_text("key")
+        foreground_env.mock_resolve.return_value = (fake_cert, fake_key)
+
+        mock_get_secret = MagicMock(return_value="test-secret-value")
+
+        with (
+            patch("sys.platform", "linux"),
+            patch("amplifier_distro.server.auth.get_or_create_secret", mock_get_secret),
+        ):
+            _run_foreground(
+                host="127.0.0.1",
+                port=8080,
+                apps_dir=None,
+                reload=False,
+                dev=True,
+                tls_mode="auto",
+            )
+
+        # get_or_create_secret must have been called — auth was activated
+        mock_get_secret.assert_called_once()
+
+    def test_no_auth_skips_auth_even_with_tls_on_linux(self, foreground_env) -> None:
+        """With no_auth=True, auth must NOT be set up even when TLS+Linux is active."""
+        from unittest.mock import MagicMock, patch
+
+        from amplifier_distro.server.cli import _run_foreground
+
+        fake_cert = foreground_env.tmp_path / "cert.pem"
+        fake_key = foreground_env.tmp_path / "key.pem"
+        fake_cert.write_text("cert")
+        fake_key.write_text("key")
+        foreground_env.mock_resolve.return_value = (fake_cert, fake_key)
+
+        mock_get_secret = MagicMock(return_value="test-secret-value")
+
+        with (
+            patch("sys.platform", "linux"),
+            patch("amplifier_distro.server.auth.get_or_create_secret", mock_get_secret),
+        ):
+            _run_foreground(
+                host="127.0.0.1",
+                port=8080,
+                apps_dir=None,
+                reload=False,
+                dev=True,
+                tls_mode="auto",
+                no_auth=True,
+            )
+
+        # get_or_create_secret must NOT have been called — auth was bypassed
+        mock_get_secret.assert_not_called()

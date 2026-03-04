@@ -108,8 +108,6 @@ def serve_cmd(
     # --ssl-certfile implies manual TLS mode when tls_mode is still default
     if tls_mode == "off" and ssl_certfile:
         tls_mode = "manual"
-    if no_auth:
-        click.echo("Warning: --no-auth not yet implemented", err=True)
     _run_foreground(
         host,
         port,
@@ -120,6 +118,7 @@ def serve_cmd(
         tls_mode=tls_mode,
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
+        no_auth=no_auth,
     )
 
 

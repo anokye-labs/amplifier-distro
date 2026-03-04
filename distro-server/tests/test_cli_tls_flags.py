@@ -142,15 +142,25 @@ class TestTlsFlags:
         assert result.exit_code == 0
         mock_run.assert_called_once()
 
-    def test_no_auth_flag_emits_warning(self) -> None:
-        """'amp-distro serve --no-auth' warns that the flag is not yet wired."""
+    def test_no_auth_flag_forwarded_to_run_foreground(self) -> None:
+        """'amp-distro serve --no-auth' must pass no_auth=True to _run_foreground."""
         runner = CliRunner()
         mock_run = MagicMock()
         with patch("amplifier_distro.server.cli._run_foreground", mock_run):
             result = runner.invoke(main, ["serve", "--no-auth"])
         assert result.exit_code == 0
-        assert "--no-auth" in result.output
-        assert "not yet implemented" in result.output
+        mock_run.assert_called_once()
+        _, kwargs = mock_run.call_args
+        assert kwargs.get("no_auth") is True
+
+    def test_no_auth_no_stub_warning(self) -> None:
+        """--no-auth must NOT print a 'not yet implemented' stub warning."""
+        runner = CliRunner()
+        mock_run = MagicMock()
+        with patch("amplifier_distro.server.cli._run_foreground", mock_run):
+            result = runner.invoke(main, ["serve", "--no-auth"])
+        assert result.exit_code == 0
+        assert "not yet implemented" not in result.output
 
     def test_plain_serve_stays_http(self) -> None:
         """Plain 'amp-distro serve' must stay HTTP (zero breaking changes)."""
