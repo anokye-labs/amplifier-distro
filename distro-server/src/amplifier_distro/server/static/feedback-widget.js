@@ -5,9 +5,10 @@
  * pre-filled GitHub issue.  Drop a single <script> tag into any page and
  * call `AmplifierFeedback.init(opts)`.
  *
- * Two rendering modes:
- *   "floating" – fixed FAB in the bottom-right corner (default)
- *   "header"   – an icon button you mount into an existing container
+ * Three rendering modes:
+ *   "floating" – fixed FAB in the bottom-right corner (default/fallback)
+ *   "header"   – icon-only button for dense header bars (chat)
+ *   "inline"   – text button that blends into surrounding links (dashboard footer, settings header)
  */
 (function () {
   'use strict';
@@ -94,6 +95,27 @@
     '  outline-offset: 1px;',
     '}',
     '.amp-fb-header-btn svg { width: 14px; height: 14px; }',
+
+    /* --- Inline trigger (blends into surrounding text links) --- */
+    '.amp-fb-inline-btn {',
+    '  background: none; border: none; padding: 0; margin: 0;',
+    '  color: inherit; font: inherit; cursor: pointer;',
+    '  text-decoration: none; position: relative;',
+    '  transition: color 200ms cubic-bezier(0.22,1,0.36,1);',
+    '}',
+    '.amp-fb-inline-btn:hover {',
+    '  color: var(--signal, var(--accent, #5B4DE3));',
+    '}',
+    '.amp-fb-inline-btn::after {',
+    '  content: ""; position: absolute; bottom: -2px; left: 0; right: 0;',
+    '  height: 1px; background: var(--signal, var(--accent, #5B4DE3));',
+    '  transform: scaleX(0); transition: transform 200ms cubic-bezier(0.22,1,0.36,1);',
+    '}',
+    '.amp-fb-inline-btn:hover::after { transform: scaleX(1); }',
+    '.amp-fb-inline-btn:focus-visible {',
+    '  outline: 2px solid var(--signal, var(--accent, #5B4DE3));',
+    '  outline-offset: 2px;',
+    '}',
 
     /* --- Backdrop --- */
     '.amp-fb-backdrop {',
@@ -277,10 +299,12 @@
     return node;
   }
 
-  function buildGitHubUrl(category, title, body, repo) {
+  function buildGitHubUrl(category, title, body, repo, surface) {
     var label = GITHUB_LABEL_MAP[category] || 'feedback';
+    var labels = [label];
+    if (surface) { labels.push('surface:' + surface); }
     var parts = [
-      'labels=' + encodeURIComponent(label),
+      'labels=' + encodeURIComponent(labels.join(',')),
       'title=' + encodeURIComponent('[' + (CATEGORIES.find(function(c){return c.key===category;}) || {}).label + '] ' + title),
       'body=' + encodeURIComponent(body),
     ];
@@ -460,7 +484,8 @@
         }
       );
 
-      var url = buildGitHubUrl(category, title, body, opts.repo || REPO);
+      var surface = opts.context && opts.context.app || '';
+      var url = buildGitHubUrl(category, title, body, opts.repo || REPO, surface);
 
       submitBtn.textContent = 'Opening GitHub\u2026';
       submitBtn.setAttribute('disabled', 'true');
@@ -489,10 +514,14 @@
    * Initialise the feedback widget.
    *
    * @param {Object}  opts
-   * @param {"floating"|"header"} [opts.mode="floating"]
-   * @param {HTMLElement}         [opts.container]  Mount target for "header" mode
-   * @param {string}              [opts.repo]       GitHub owner/repo
-   * @param {Object}              [opts.context]    Extra context { app, sessionId }
+   * @param {"floating"|"header"|"inline"} [opts.mode="floating"]
+   *   - "floating": fixed FAB in the bottom-right corner
+   *   - "header":   icon-only button for dense header bars (e.g. chat)
+   *   - "inline":   text button that blends into surrounding links (e.g. footer, header-actions)
+   * @param {HTMLElement}  [opts.container]  Mount target (required for "header" and "inline")
+   * @param {string}       [opts.label]      Text label for inline mode (default: "Feedback")
+   * @param {string}       [opts.repo]       GitHub owner/repo
+   * @param {Object}       [opts.context]    Extra context { app, sessionId }
    */
   function init(opts) {
     opts = opts || {};
@@ -500,26 +529,41 @@
 
     var mode = opts.mode || 'floating';
     var trigger;
+    var openFn = function () { openModal(Object.assign({}, opts, { _triggerEl: trigger })); };
 
     if (mode === 'header' && opts.container) {
+      // Icon-only button for dense headers (chat)
       trigger = el('button', {
         className: 'amp-fb-header-btn',
         'aria-label': 'Send feedback',
         'aria-haspopup': 'dialog',
         title: 'Send feedback',
         type: 'button',
-        onClick: function () { openModal(Object.assign({}, opts, { _triggerEl: trigger })); },
+        onClick: openFn,
       });
       trigger.innerHTML = ICON_SVG;
       opts.container.appendChild(trigger);
+
+    } else if (mode === 'inline' && opts.container) {
+      // Text button that blends into surrounding links
+      trigger = el('button', {
+        className: 'amp-fb-inline-btn',
+        'aria-label': 'Send feedback',
+        'aria-haspopup': 'dialog',
+        type: 'button',
+        onClick: openFn,
+      }, [opts.label || 'Feedback']);
+      opts.container.appendChild(trigger);
+
     } else {
+      // Floating FAB (fallback)
       trigger = el('button', {
         className: 'amp-fb-fab',
         'aria-label': 'Send feedback',
         'aria-haspopup': 'dialog',
         title: 'Send feedback',
         type: 'button',
-        onClick: function () { openModal(Object.assign({}, opts, { _triggerEl: trigger })); },
+        onClick: openFn,
       });
       trigger.innerHTML = ICON_SVG;
       document.body.appendChild(trigger);
