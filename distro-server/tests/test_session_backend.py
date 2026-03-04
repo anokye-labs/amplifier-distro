@@ -1460,7 +1460,7 @@ class TestFoundationBackendUpdateSessionMetadata:
 
 
 class TestQueueRewire:
-    """Tests for queue holder rewire on reconnect (BUG-2, issue #60)."""
+    """Tests for queue holder fanout on reconnect."""
 
     def _make_wired_backend(self):
         """Build a FoundationBackend with a wired session for testing."""
@@ -1496,57 +1496,61 @@ class TestQueueRewire:
         session.coordinator = coordinator
         return session
 
-    @pytest.mark.asyncio
-    async def test_events_flow_to_new_queue_after_reconnect(self):
-        """After reconnect, on_stream must push events to the NEW queue."""
-        backend = self._make_wired_backend()
-        session = self._make_mock_session()
-        session_id = "test-rewire"
-
-        # Simulate _SessionHandle
-        handle = MagicMock()
-        handle.session = session
-        handle.hook_unregister = None
-        backend._sessions[session_id] = handle
-
-        # First wire: create with queue_a
-        queue_a = asyncio.Queue()
-        unregister = backend._wire_event_queue(session, session_id, queue_a)
-        handle.hook_unregister = unregister
-
-        # Capture the on_stream handler from the hooks.register calls
+    def _capture_on_stream(self, session):
+        """Extract the on_stream hook handler from mock register calls."""
         register_calls = session.coordinator.hooks.register.call_args_list
-        on_stream_handler = None
         for call in register_calls:
             args = call[0]
             if len(args) >= 2 and callable(args[1]):
-                on_stream_handler = args[1]
-                break
-        assert on_stream_handler is not None, "on_stream hook must be registered"
+                return args[1]
+        raise AssertionError("on_stream hook must be registered")
+
+    # ------------------------------------------------------------------
+    # Fanout: both original and reconnected clients receive events
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_events_fanout_to_both_queues_after_reconnect(self):
+        """After reconnect, events must fan out to BOTH queues (not just new)."""
+        backend = self._make_wired_backend()
+        session = self._make_mock_session()
+        session_id = "test-fanout"
+
+        handle = MagicMock()
+        handle.session = session
+        handle.hook_unregister = None
+        backend._sessions[session_id] = handle
+
+        # First wire: create with queue_a (BrowserA)
+        queue_a = asyncio.Queue()
+        unregister = backend._wire_event_queue(session, session_id, queue_a)
+        handle.hook_unregister = unregister
+
+        on_stream = self._capture_on_stream(session)
 
         # Verify events go to queue_a
-        await on_stream_handler("test:event", {"data": "first"})
+        await on_stream("test:event", {"data": "first"})
         assert queue_a.qsize() == 1
-        event = queue_a.get_nowait()
-        assert event == ("test:event", {"data": "first"})
+        queue_a.get_nowait()
 
-        # Reconnect: wire with queue_b (simulates page refresh)
+        # Reconnect: wire with queue_b (BrowserB)
         queue_b = asyncio.Queue()
         backend._wire_event_queue(session, session_id, queue_b)
 
-        # Now events should flow to queue_b, NOT queue_a
-        await on_stream_handler("test:event", {"data": "second"})
-        assert queue_b.qsize() == 1, "Events must flow to NEW queue after reconnect"
-        assert queue_a.qsize() == 0, "Old queue must NOT receive events after reconnect"
-        event = queue_b.get_nowait()
-        assert event == ("test:event", {"data": "second"})
+        # Events must fan out to BOTH queues
+        await on_stream("test:event", {"data": "second"})
+        assert queue_a.qsize() == 1, "Original queue must still receive events"
+        assert queue_b.qsize() == 1, "New queue must also receive events"
+        assert queue_a.get_nowait() == ("test:event", {"data": "second"})
+        assert queue_b.get_nowait() == ("test:event", {"data": "second"})
 
     @pytest.mark.asyncio
-    async def test_display_system_rewired_on_reconnect(self):
-        """Display system must use the new queue after reconnect."""
+    async def test_display_system_uses_holder_for_fanout(self):
+        """Display system must be wired to the holder, not a raw queue."""
+
         backend = self._make_wired_backend()
         session = self._make_mock_session()
-        session_id = "test-display-rewire"
+        session_id = "test-display-holder"
 
         handle = MagicMock()
         handle.session = session
@@ -1554,18 +1558,24 @@ class TestQueueRewire:
         backend._sessions[session_id] = handle
 
         queue_a = asyncio.Queue()
-        unregister = backend._wire_event_queue(session, session_id, queue_a)
-        handle.hook_unregister = unregister
+        backend._wire_event_queue(session, session_id, queue_a)
 
-        # Reconnect with queue_b
+        # The initial display system should have been set with the holder
+        set_calls = session.coordinator.set.call_args_list
+        display_calls = [c for c in set_calls if c[0][0] == "display"]
+        assert len(display_calls) >= 1, "Display system must be set on initial wire"
+
+        # On reconnect, display should NOT be re-set (holder already fans out)
         queue_b = asyncio.Queue()
         backend._wire_event_queue(session, session_id, queue_b)
 
-        # Display system should have been re-set on coordinator
-        set_calls = session.coordinator.set.call_args_list
-        display_calls = [c for c in set_calls if c[0][0] == "display"]
-        # At least 2 display calls: one from first wire, one from reconnect
-        assert len(display_calls) >= 2, "Display system must be rewired on reconnect"
+        display_calls_after = [
+            c for c in session.coordinator.set.call_args_list if c[0][0] == "display"
+        ]
+        # Should still be just the one initial call — reconnect doesn't re-set
+        assert len(display_calls_after) == len(display_calls), (
+            "Display system should not be re-set on reconnect (holder fans out)"
+        )
 
     @pytest.mark.asyncio
     async def test_queue_holder_cleaned_up_on_unregister(self):
@@ -1591,8 +1601,8 @@ class TestQueueRewire:
         assert session_id not in backend._wired_sessions
 
     @pytest.mark.asyncio
-    async def test_rapid_reconnect_cycles_work(self):
-        """Multiple rapid reconnects must all route events to the latest queue."""
+    async def test_rapid_reconnect_cycles_fanout_to_all(self):
+        """Multiple rapid reconnects must fan out events to all queues."""
         backend = self._make_wired_backend()
         session = self._make_mock_session()
         session_id = "test-rapid"
@@ -1607,17 +1617,165 @@ class TestQueueRewire:
         unregister = backend._wire_event_queue(session, session_id, queue_1)
         handle.hook_unregister = unregister
 
-        # Capture on_stream
-        on_stream = session.coordinator.hooks.register.call_args_list[0][0][1]
+        on_stream = self._capture_on_stream(session)
 
         # 5 rapid reconnects
-        latest_queue = None
-        for i in range(5):
-            latest_queue = asyncio.Queue()
-            backend._wire_event_queue(session, session_id, latest_queue)
+        all_queues = [queue_1]
+        for _ in range(5):
+            q = asyncio.Queue()
+            all_queues.append(q)
+            backend._wire_event_queue(session, session_id, q)
 
-        # Events should only go to the latest queue
+        # Events should fan out to ALL 6 queues
         await on_stream("test:event", {"cycle": "final"})
-        assert latest_queue is not None
-        assert latest_queue.qsize() == 1
-        assert queue_1.qsize() == 0
+        for i, q in enumerate(all_queues):
+            assert q.qsize() == 1, f"Queue {i} must receive the event"
+
+    # ------------------------------------------------------------------
+    # dequeue_client: cleanup on disconnect
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_dequeue_client_removes_queue_from_fanout(self):
+        """Disconnected clients must stop receiving events."""
+        backend = self._make_wired_backend()
+        session = self._make_mock_session()
+        session_id = "test-dequeue"
+
+        handle = MagicMock()
+        handle.session = session
+        handle.hook_unregister = None
+        backend._sessions[session_id] = handle
+
+        queue_a = asyncio.Queue()
+        queue_b = asyncio.Queue()
+        backend._wire_event_queue(session, session_id, queue_a)
+        backend._wire_event_queue(session, session_id, queue_b)
+
+        on_stream = self._capture_on_stream(session)
+
+        # Both receive events
+        await on_stream("test:event", {"data": "both"})
+        assert queue_a.qsize() == 1
+        assert queue_b.qsize() == 1
+        queue_a.get_nowait()
+        queue_b.get_nowait()
+
+        # BrowserA disconnects
+        backend.dequeue_client(session_id, queue_a)
+
+        # Only queue_b should receive events now
+        await on_stream("test:event", {"data": "only-b"})
+        assert queue_a.qsize() == 0, "Dequeued client must not receive events"
+        assert queue_b.qsize() == 1, "Remaining client must still receive events"
+
+    def test_dequeue_client_noop_for_unknown_session(self):
+        """dequeue_client must be safe to call for unknown sessions."""
+        backend = self._make_wired_backend()
+        # Should not raise
+        backend.dequeue_client("nonexistent", asyncio.Queue())
+
+
+class TestQueueHolder:
+    """Unit tests for the _QueueHolder fanout wrapper."""
+
+    def test_single_queue_put_nowait(self):
+        """put_nowait with a single queue delivers the item."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q = asyncio.Queue()
+        holder = _QueueHolder(q)
+        holder.put_nowait(("event", {"data": 1}))
+        assert q.qsize() == 1
+        assert q.get_nowait() == ("event", {"data": 1})
+
+    def test_fanout_to_multiple_queues(self):
+        """put_nowait broadcasts to all registered queues."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q1 = asyncio.Queue()
+        q2 = asyncio.Queue()
+        q3 = asyncio.Queue()
+        holder = _QueueHolder(q1)
+        holder.add(q2)
+        holder.add(q3)
+
+        holder.put_nowait(("event", {"data": "all"}))
+        for q in (q1, q2, q3):
+            assert q.qsize() == 1
+            assert q.get_nowait() == ("event", {"data": "all"})
+
+    def test_remove_stops_delivery(self):
+        """After remove(), that queue no longer receives events."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q1 = asyncio.Queue()
+        q2 = asyncio.Queue()
+        holder = _QueueHolder(q1)
+        holder.add(q2)
+
+        holder.remove(q1)
+        holder.put_nowait(("event", {}))
+        assert q1.qsize() == 0, "Removed queue must not get events"
+        assert q2.qsize() == 1
+
+    def test_remove_unknown_queue_is_noop(self):
+        """remove() with an unknown queue does not raise."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q1 = asyncio.Queue()
+        holder = _QueueHolder(q1)
+        # Should not raise
+        holder.remove(asyncio.Queue())
+
+    def test_put_nowait_empty_set_raises_queue_full(self):
+        """put_nowait on an empty holder raises QueueFull."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q = asyncio.Queue()
+        holder = _QueueHolder(q)
+        holder.remove(q)  # Now empty
+
+        with pytest.raises(asyncio.QueueFull):
+            holder.put_nowait(("event", {}))
+
+    def test_partial_queue_full_still_delivers_to_others(self):
+        """If one queue is full, others still receive the event."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        full_q = asyncio.Queue(maxsize=1)
+        full_q.put_nowait("filler")  # Fill it up
+        normal_q = asyncio.Queue()
+
+        holder = _QueueHolder(full_q)
+        holder.add(normal_q)
+
+        # Should NOT raise — partial delivery is ok
+        holder.put_nowait(("event", {"data": "partial"}))
+        assert normal_q.qsize() == 1
+        assert normal_q.get_nowait() == ("event", {"data": "partial"})
+
+    def test_add_same_queue_twice_delivers_once(self):
+        """Adding the same queue twice must not cause double delivery."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q = asyncio.Queue()
+        holder = _QueueHolder(q)
+        holder.add(q)  # duplicate add — set ignores it
+        holder.put_nowait(("event", {"data": "once"}))
+        assert q.qsize() == 1, "Duplicate add must not cause double delivery"
+
+    def test_all_queues_full_raises_queue_full(self):
+        """If ALL queues are full, put_nowait raises QueueFull."""
+        from amplifier_distro.server.session_backend import _QueueHolder
+
+        q1 = asyncio.Queue(maxsize=1)
+        q2 = asyncio.Queue(maxsize=1)
+        q1.put_nowait("filler")
+        q2.put_nowait("filler")
+
+        holder = _QueueHolder(q1)
+        holder.add(q2)
+
+        with pytest.raises(asyncio.QueueFull):
+            holder.put_nowait(("event", {}))

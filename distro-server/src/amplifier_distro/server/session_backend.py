@@ -328,22 +328,52 @@ class MockBackend:
 
 
 class _QueueHolder:
-    """Mutable wrapper so hook closures can have their target queue swapped.
+    """Mutable wrapper supporting multiple queue targets for event fanout.
 
-    Hook closures capture this holder by reference. On reconnect, swapping
-    ``holder.queue`` redirects all events to the new connection's queue
-    without re-registering hooks on the coordinator. In single-threaded
-    asyncio, no ``await`` occurs between the swap and any ``put_nowait``
-    call, so cooperative scheduling cannot interleave them.
+    Hook closures capture this holder by reference. Queues are added with
+    ``add()`` on client connect and removed with ``remove()`` on disconnect
+    without re-registering hooks on the coordinator.
+
+    ``put_nowait()`` broadcasts to **all** registered queues. It raises
+    ``asyncio.QueueFull`` only when every queue is full (or the set is
+    empty), preserving the contract callers rely on for drop-logging.
+
+    In single-threaded asyncio, no ``await`` occurs between queue mutations
+    and any ``put_nowait`` call, so cooperative scheduling cannot interleave
+    them.
     """
 
-    __slots__ = ("queue",)
+    __slots__ = ("_queues",)
 
     def __init__(self, queue: asyncio.Queue) -> None:
-        self.queue = queue
+        self._queues: set[asyncio.Queue] = {queue}
+
+    def add(self, queue: asyncio.Queue) -> None:
+        """Add a queue to the fanout set (client connect / reconnect)."""
+        self._queues.add(queue)
+
+    def remove(self, queue: asyncio.Queue) -> None:
+        """Remove a queue from the fanout set (client disconnect)."""
+        self._queues.discard(queue)
 
     def put_nowait(self, item: Any) -> None:
-        self.queue.put_nowait(item)
+        """Broadcast *item* to all registered queues.
+
+        Silently skips individual full queues so a slow client cannot block
+        delivery to faster ones.  Raises ``asyncio.QueueFull`` only when
+        every queue is full or the set is empty (no delivery was possible).
+        """
+        queues = list(self._queues)
+        if not queues:
+            raise asyncio.QueueFull
+        failed = 0
+        for q in queues:
+            try:
+                q.put_nowait(item)
+            except asyncio.QueueFull:
+                failed += 1
+        if failed == len(queues):
+            raise asyncio.QueueFull
 
 
 class FoundationBackend:
@@ -402,9 +432,10 @@ class FoundationBackend:
         is provided. All three closures push (event_name, data) tuples
         to the same queue via a _QueueHolder indirection.
 
-        On reconnect (session already in _wired_sessions), swaps the queue
-        reference in the existing holder so all hook closures instantly
-        target the new queue without re-registration on the coordinator.
+        On reconnect (session already in _wired_sessions), adds the new
+        queue to the existing holder's fanout set so all connected clients
+        continue receiving events — the originating client's queue is NOT
+        replaced, preventing it from being starved of the completion signal.
 
         Returns an unregister callable that removes all registered hooks and
         removes the session from _wired_sessions.
@@ -417,25 +448,24 @@ class FoundationBackend:
         coordinator = session.coordinator
 
         if session_id in self._wired_sessions:
-            # Already wired — swap the queue target so existing hook closures
-            # instantly push to the new connection's queue. No hook
-            # unregister/re-register needed. Safe in single-threaded asyncio:
-            # no await between the swap and any put_nowait call.
+            # Already wired — add the new queue to the fanout set so the
+            # new client also receives events.  The existing clients' queues
+            # remain in the set: they keep getting events and will still
+            # receive the orchestrator:complete / prompt_complete signal.
+            # No hook unregister/re-register needed.  Safe in single-threaded
+            # asyncio: no await between the add() and any put_nowait call.
             holder = self._queue_holders.get(session_id)
             if holder is not None:
-                holder.queue = event_queue
+                holder.add(event_queue)
                 logger.debug(
-                    "Swapped event queue for session %s (reconnect)", session_id
+                    "Added event queue for session %s (fanout reconnect)", session_id
                 )
 
-            # Also update display system to use the new queue
-            display = QueueDisplaySystem(event_queue)
-            if hasattr(coordinator, "set"):
-                coordinator.set("display", display)
+            # The display system already points to the holder, which now
+            # broadcasts to the new queue — no replacement needed.
 
-            # Update approval system — route through holder for consistency
-            # with the initial-wire path (avoids stale closure if approval
-            # system is ever cached outside the coordinator).
+            # Approval system: rebuild so on_approval_request_rewire closure
+            # references the updated holder (handles stale-closure edge cases).
             def _on_approval_request_rewire(
                 request_id: str,
                 prompt: str,
@@ -443,6 +473,8 @@ class FoundationBackend:
                 timeout: float,
                 default: str,
             ) -> None:
+                if holder is None:
+                    return
                 try:
                     holder.put_nowait(
                         (
@@ -474,7 +506,8 @@ class FoundationBackend:
         self._wired_sessions.add(session_id)
 
         # Create a mutable queue holder — hook closures capture this by
-        # reference, so swapping holder.queue on reconnect retargets them.
+        # reference.  On reconnect, additional queues are added via
+        # holder.add() so all connected clients receive events (fanout).
         holder = _QueueHolder(event_queue)
         self._queue_holders[session_id] = holder
 
@@ -548,8 +581,9 @@ class FoundationBackend:
             for evt, exc in failed_evts:
                 logger.warning("  hook registration failed [%s]: %s", evt, exc)
 
-        # 2. Display system — display messages to queue
-        display = QueueDisplaySystem(event_queue)
+        # 2. Display system — display messages via holder so future clients
+        # added by holder.add() automatically receive display messages too.
+        display = QueueDisplaySystem(holder)  # type: ignore[arg-type]
         if hasattr(coordinator, "set"):
             coordinator.set("display", display)
 
@@ -1066,6 +1100,22 @@ class FoundationBackend:
         """
         handle = self._sessions.get(session_id)
         return handle.hook_unregister if handle else None
+
+    def dequeue_client(self, session_id: str, queue: asyncio.Queue) -> None:
+        """Remove a client's event queue from the fanout set for a session.
+
+        Called when a WebSocket client disconnects so the dead queue is
+        evicted from the ``_QueueHolder`` and does not accumulate memory or
+        generate spurious ``QueueFull`` errors on subsequent events.
+
+        Safe to call even if the session or holder no longer exists (no-op).
+        """
+        holder = self._queue_holders.get(session_id)
+        if holder is not None:
+            holder.remove(queue)
+            logger.debug(
+                "Removed event queue for session %s (client disconnect)", session_id
+            )
 
     def get_session_config(self, session_id: str) -> dict[str, Any] | None:
         """Return the mount-plan config dict for a live session."""

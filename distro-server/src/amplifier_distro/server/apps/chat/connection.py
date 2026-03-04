@@ -123,6 +123,13 @@ class ChatConnection:
             non_exec = [t for t in self._tasks if t is not self._active_execution]
             if non_exec:
                 await asyncio.gather(*non_exec, return_exceptions=True)
+            # Remove this connection's event queue from the backend fanout set
+            # so the dead queue doesn't accumulate or generate spurious
+            # QueueFull errors after disconnect.
+            if self._session_id:
+                dequeue = getattr(self._backend, "dequeue_client", None)
+                if dequeue is not None:
+                    dequeue(self._session_id, self.event_queue)
             # Stop the fanout loop gracefully via sentinel first, then
             # force-cancel as fallback. Using put_nowait avoids blocking
             # if the queue is full (which happens when the fanout died
@@ -137,9 +144,9 @@ class ChatConnection:
                     await fanout_task
             # Do NOT call _cleanup_hook() here. Hooks are intentionally left
             # registered so the still-running execution's events can be
-            # redirected to the new queue via QueueHolder swap on reconnect.
-            # _cleanup_hook() is still called from _dispatch_command (bundle/cwd)
-            # for explicit session replacement.
+            # delivered to any remaining connected clients via the fanout
+            # holder.  _cleanup_hook() is still called from _dispatch_command
+            # (bundle/cwd) for explicit session replacement.
 
     def _cleanup_hook(self) -> None:
         """Unregister the hook if one is registered. Always safe to call.
