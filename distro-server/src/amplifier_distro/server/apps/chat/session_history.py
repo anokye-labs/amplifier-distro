@@ -297,11 +297,31 @@ def _iter_session_dirs(projects_path: Path) -> list[Path]:
 _SCAN_WORKERS = 8  # Thread pool size for parallel session reads (I/O-bound)
 
 
-def scan_sessions(amplifier_home: str | None = None) -> list[dict[str, Any]]:
+def _stat_mtime(session_dir: Path) -> float:
+    """Return mtime of transcript (or session dir) for sorting.  0.0 on error."""
+    transcript = session_dir / TRANSCRIPT_FILENAME
+    target = transcript if transcript.exists() else session_dir
+    try:
+        return target.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def scan_sessions(
+    amplifier_home: str | None = None,
+    *,
+    limit: int = 0,
+    pinned_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
     """Scan ~/.amplifier/projects/ and return lightweight metadata for all sessions.
 
     Returns a list sorted newest-first by last_updated.
     Never raises — malformed sessions are included with degraded metadata.
+
+    When *limit* > 0, only the newest *limit* session directories (plus any
+    whose session_id appears in *pinned_ids*) are fully read.  The remaining
+    directories are skipped, avoiding expensive metadata/transcript I/O for
+    sessions that would be sliced away by the caller anyway.
 
     Session directories are read in parallel using a thread pool since each
     read is I/O-bound (stat + small JSON file reads + transcript tail seek).
@@ -312,6 +332,28 @@ def scan_sessions(amplifier_home: str | None = None) -> list[dict[str, Any]]:
 
     if not session_dirs:
         return []
+
+    # When a limit is set, stat all dirs for mtime (very cheap — ~0.03s for
+    # 5000 dirs) then only fully read the top N + any pinned sessions.
+    if limit > 0:
+        pinned = pinned_ids or set()
+        scored = [(sd, _stat_mtime(sd)) for sd in session_dirs]
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        selected: list[Path] = []
+        selected_ids: set[str] = set()
+        for sd, _mtime in scored:
+            if len(selected) < limit or sd.name in pinned:
+                selected.append(sd)
+                selected_ids.add(sd.name)
+
+        # Include any pinned sessions that fell outside the top N
+        for sd, _mtime in scored:
+            if sd.name in pinned and sd.name not in selected_ids:
+                selected.append(sd)
+                selected_ids.add(sd.name)
+
+        session_dirs = selected
 
     def _process(session_dir: Path) -> dict[str, Any] | None:
         try:
