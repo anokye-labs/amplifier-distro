@@ -3307,13 +3307,6 @@
       };
     }, [handleWsMessage]);
 
-    const refreshHistory = useCallback(() => {
-      // Consolidated poll: replaces both discoverNewHistorySessions (30s)
-      // and pollSessionRevisions (7s).  A silent history sync detects new
-      // sessions, name/description changes, and revision updates in one call.
-      syncSessionHistory({ silent: true });
-    }, [syncSessionHistory]);
-
     const syncSessionHistory = useCallback((options = {}) => {
       const silent = !!options.silent;
       if (historySyncInFlightRef.current) return;
@@ -3491,6 +3484,13 @@
           if (!silent) setSyncingHistory(false);
         });
     }, []);
+
+    const refreshHistory = useCallback(() => {
+      // Consolidated poll: replaces both discoverNewHistorySessions (30s)
+      // and pollSessionRevisions (7s).  A silent history sync detects new
+      // sessions, name/description changes, and revision updates in one call.
+      syncSessionHistory({ silent: true });
+    }, [syncSessionHistory]);
 
     const loadMoreHistory = useCallback(() => {
       if (loadingMoreHistory || !hasMoreHistory) return;
