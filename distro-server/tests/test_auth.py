@@ -281,6 +281,15 @@ class TestAuthMeRoute:
 
         assert resp.status_code == 401
 
+    async def test_returns_401_with_invalid_cookie(self, auth_client):
+        """GET /auth/me returns 401 when session cookie is tampered or expired."""
+        auth_client.cookies.set("amplifier_session", "tampered-garbage-value")
+        resp = await auth_client.get("/auth/me")
+
+        assert resp.status_code == 401
+        body = resp.json()
+        assert body["error"] == "Invalid or expired session"
+
 
 class TestLogoutRoute:
     """Tests for POST /logout."""
@@ -303,7 +312,7 @@ class TestLogoutRoute:
             follow_redirects=False,
         )
 
-        assert resp.status_code in (303, 307)
+        assert resp.status_code == 303
         # The cookie should be cleared (set to empty or max_age=0)
         set_cookie = resp.headers.get("set-cookie", "")
         assert "amplifier_session" in set_cookie
