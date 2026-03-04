@@ -8,6 +8,7 @@ configuration, and session token management using signed tokens.
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 from pathlib import Path
 
@@ -109,3 +110,89 @@ def verify_session_token(
         return signer.unsign(token, max_age=max_age).decode()
     except (BadSignature, SignatureExpired):
         return None
+
+
+# ---------------------------------------------------------------------------
+# Localhost detection
+# ---------------------------------------------------------------------------
+
+_LOCALHOST_ADDRS = {"127.0.0.1", "localhost", "::1"}
+
+
+def is_localhost_request(client_host: str | None) -> bool:
+    """Check if a request comes from localhost.
+
+    Localhost requests bypass auth entirely.
+    """
+    if client_host is None:
+        return False
+    return client_host in _LOCALHOST_ADDRS
+
+
+# ---------------------------------------------------------------------------
+# Auth middleware factory
+# ---------------------------------------------------------------------------
+
+# Paths that never require auth
+_PUBLIC_PATHS = {"/login", "/logout", "/api/health", "/favicon.svg"}
+_PUBLIC_PREFIXES = ("/static/",)
+
+
+def create_auth_middleware(secret: str, session_timeout: int = 2592000):
+    """Create a Starlette middleware that enforces authentication.
+
+    Bypass rules (in order):
+    1. Localhost requests — always allowed
+    2. Public paths — /login, /logout, /api/health, static assets
+    3. Valid AMPLIFIER_SERVER_API_KEY bearer token
+    4. Valid session cookie
+
+    If none of the above, redirect to /login (for HTML) or return 401 (for API).
+    """
+    import hmac as _hmac
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, RedirectResponse
+
+    class AuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            # 1. Localhost bypass
+            client_host = request.client.host if request.client else None
+            if is_localhost_request(client_host):
+                return await call_next(request)
+
+            # 2. Public paths
+            path = request.url.path
+            if path in _PUBLIC_PATHS or any(
+                path.startswith(p) for p in _PUBLIC_PREFIXES
+            ):
+                return await call_next(request)
+
+            # 3. Bearer token (existing AMPLIFIER_SERVER_API_KEY)
+            api_key = os.environ.get("AMPLIFIER_SERVER_API_KEY", "")
+            if api_key:
+                auth_header = request.headers.get("authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:]
+                    if _hmac.compare_digest(token, api_key):
+                        return await call_next(request)
+
+            # 4. Session cookie
+            cookie = request.cookies.get("amplifier_session")
+            if cookie:
+                username = verify_session_token(
+                    cookie, secret=secret, max_age=session_timeout
+                )
+                if username is not None:
+                    return await call_next(request)
+
+            # Not authenticated — redirect or 401
+            if "text/html" in request.headers.get("accept", ""):
+                return RedirectResponse(url="/login", status_code=303)
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Authentication required"},
+            )
+
+    return AuthMiddleware

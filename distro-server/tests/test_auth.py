@@ -13,9 +13,29 @@ from amplifier_distro.server.auth import (
     create_session_token,
     get_or_create_secret,
     is_auth_applicable,
+    is_localhost_request,
     verify_session_token,
 )
 from amplifier_distro.server.auth_routes import create_auth_router
+
+
+class TestIsLocalhostRequest:
+    """Tests for localhost bypass detection."""
+
+    def test_127_0_0_1_is_localhost(self):
+        assert is_localhost_request("127.0.0.1") is True
+
+    def test_localhost_string_is_localhost(self):
+        assert is_localhost_request("localhost") is True
+
+    def test_ipv6_loopback_is_localhost(self):
+        assert is_localhost_request("::1") is True
+
+    def test_remote_ip_is_not_localhost(self):
+        assert is_localhost_request("192.168.1.100") is False
+
+    def test_none_is_not_localhost(self):
+        assert is_localhost_request(None) is False
 
 
 class TestAuthenticatePam:
