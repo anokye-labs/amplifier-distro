@@ -483,8 +483,9 @@ def _run_foreground(
     ssl_kwargs: dict[str, Any] = {}
     tls_pair = resolve_cert(mode=tls_mode, certfile=ssl_certfile, keyfile=ssl_keyfile)
     if tls_pair is not None:
-        ssl_kwargs["ssl_certfile"] = str(tls_pair[0])
-        ssl_kwargs["ssl_keyfile"] = str(tls_pair[1])
+        cert_path, key_path = tls_pair
+        ssl_kwargs["ssl_certfile"] = str(cert_path)
+        ssl_kwargs["ssl_keyfile"] = str(key_path)
 
     scheme = "https" if ssl_kwargs else "http"
 
