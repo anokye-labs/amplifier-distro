@@ -1,9 +1,15 @@
-"""Tests for PAM authentication module."""
+"""Tests for PAM authentication module and session token management."""
 
 import logging
 from unittest.mock import MagicMock, patch
 
-from amplifier_distro.server.auth import authenticate_pam, is_auth_applicable
+from amplifier_distro.server.auth import (
+    authenticate_pam,
+    create_session_token,
+    get_or_create_secret,
+    is_auth_applicable,
+    verify_session_token,
+)
 
 
 class TestAuthenticatePam:
@@ -120,3 +126,59 @@ class TestIsAuthApplicable:
         result = is_auth_applicable(tls_active=True, platform="linux")
 
         assert result is True
+
+
+class TestSessionTokens:
+    """Tests for create_session_token() and verify_session_token()."""
+
+    def test_create_verify_round_trip(self):
+        """create + verify round-trip returns the original username."""
+        secret = "test-secret-key"
+        token = create_session_token("alice", secret)
+        result = verify_session_token(token, secret)
+
+        assert result == "alice"
+
+    def test_invalid_token_returns_none(self):
+        """verify_session_token returns None for a garbage token."""
+        result = verify_session_token("not-a-valid-token", "some-secret")
+
+        assert result is None
+
+    def test_wrong_secret_returns_none(self):
+        """verify_session_token returns None when secret doesn't match."""
+        token = create_session_token("alice", "secret-one")
+        result = verify_session_token(token, "secret-two")
+
+        assert result is None
+
+    def test_expired_token_returns_none(self):
+        """verify_session_token returns None when token exceeds max_age."""
+        import time as _time
+
+        real_time = _time.time
+
+        # Create token at current time, then advance clock by 2s for verify
+        token = create_session_token("alice", "test-key")
+        with patch("itsdangerous.timed.time.time", side_effect=lambda: real_time() + 2):
+            result = verify_session_token(token, "test-key", max_age=0)
+
+        assert result is None
+
+
+class TestGetOrCreateSecret:
+    """Tests for get_or_create_secret()."""
+
+    def test_creates_secret_file(self, tmp_path):
+        """Creates a session-secret.key file with a long-enough secret."""
+        secret = get_or_create_secret(tmp_path)
+
+        assert len(secret) > 16
+        assert (tmp_path / "session-secret.key").exists()
+
+    def test_reuses_existing_secret(self, tmp_path):
+        """Returns the same secret on a second call (reads from file)."""
+        first = get_or_create_secret(tmp_path)
+        second = get_or_create_secret(tmp_path)
+
+        assert first == second
