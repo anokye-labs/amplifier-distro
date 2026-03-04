@@ -318,6 +318,27 @@
     }
 
     .session-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .session-load-more {
+      display: block;
+      width: calc(100% - 24px);
+      margin: 8px 12px;
+      padding: 6px 0;
+      background: transparent;
+      border: 1px solid var(--border-color, #333);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .session-load-more:hover:not(:disabled) {
+      background: var(--hover-bg, rgba(255,255,255,0.05));
+      color: var(--text-primary);
+    }
+    .session-load-more:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
     .session-list-loading {
       padding: 8px 12px;
       color: var(--text-secondary);
@@ -2487,6 +2508,10 @@
     const [syncingHistory, setSyncingHistory] = useState(false);
     const [historyListLoading, setHistoryListLoading] = useState(true);
     const [pendingHistorySyncCount, setPendingHistorySyncCount] = useState(0);
+    const [hasMoreHistory, setHasMoreHistory] = useState(false);
+    const [historyOffset, setHistoryOffset] = useState(0);
+    const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
+    const HISTORY_PAGE_SIZE = 100;
     const [sessionSortMode, setSessionSortMode] = useState('recent');
     const [sessionFilterQuery, setSessionFilterQuery] = useState('');
     const [showSessionFilter, setShowSessionFilter] = useState(false);
@@ -2533,9 +2558,7 @@
     // Accumulates token usage across LLM calls within a single turn
     const turnTokensRef = useRef(null);
     const placeholderIdRef = useRef(null);
-    const revisionPollInFlightRef = useRef(false);
     const historySyncInFlightRef = useRef(false);
-    const historyDiscoverInFlightRef = useRef(false);
     const transcriptFetchAbortRef = useRef(null);
     const diskRefreshInFlightRef = useRef(new Set());
     const autoDiskRefreshAtRef = useRef({});
@@ -3284,57 +3307,21 @@
       };
     }, [handleWsMessage]);
 
-    const discoverNewHistorySessions = useCallback(() => {
-      if (historyDiscoverInFlightRef.current || historySyncInFlightRef.current) return;
-      historyDiscoverInFlightRef.current = true;
-
-      fetch('/apps/chat/api/sessions/history?limit=300')
-        .then(r => {
-          if (!r.ok) throw new Error('history discover failed: ' + r.status);
-          return r.json();
-        })
-        .then(data => {
-          const rows = Array.isArray(data?.sessions) ? data.sessions : [];
-          if (!rows.length) {
-            setPendingHistorySyncCount(0);
-            return;
-          }
-
-          const knownSessionIds = new Set();
-          for (const session of sessionsRef.current.values()) {
-            if (session && session.sessionId) knownSessionIds.add(session.sessionId);
-          }
-
-          let pending = 0;
-          for (const s of rows.slice(0, 300)) {
-            if (!s || !s.session_id) continue;
-            const messageCount = Number(s.message_count) || 0;
-            if (messageCount <= 0 && !s.last_user_message) continue;
-            if (!knownSessionIds.has(s.session_id)) pending += 1;
-          }
-          setPendingHistorySyncCount(pending);
-        })
-        .catch(err => {
-          console.warn('[chat] failed to discover new session history', err);
-        })
-        .finally(() => {
-          historyDiscoverInFlightRef.current = false;
-        });
-    }, []);
-
     const syncSessionHistory = useCallback((options = {}) => {
       const silent = !!options.silent;
       if (historySyncInFlightRef.current) return;
       historySyncInFlightRef.current = true;
       if (!silent) setSyncingHistory(true);
 
-      fetch('/apps/chat/api/sessions/history?limit=300')
+      fetch('/apps/chat/api/sessions/history?limit=' + HISTORY_PAGE_SIZE)
         .then(r => {
           if (!r.ok) throw new Error('history fetch failed: ' + r.status);
           return r.json();
         })
         .then(data => {
           const rows = Array.isArray(data?.sessions) ? data.sessions : [];
+          setHasMoreHistory(!!data?.has_more);
+          setHistoryOffset(rows.length);
           if (!rows.length) {
             setPendingHistorySyncCount(0);
             return;
@@ -3350,7 +3337,7 @@
             }
 
             let changed = false;
-            for (const s of rows.slice(0, 300)) {
+            for (const s of rows) {
               if (!s || !s.session_id) continue;
               const messageCount = Number(s.message_count) || 0;
               if (messageCount <= 0 && !s.last_user_message) continue;
@@ -3498,6 +3485,90 @@
         });
     }, []);
 
+    const refreshHistory = useCallback(() => {
+      // Consolidated poll: replaces both discoverNewHistorySessions (30s)
+      // and pollSessionRevisions (7s).  A silent history sync detects new
+      // sessions, name/description changes, and revision updates in one call.
+      syncSessionHistory({ silent: true });
+    }, [syncSessionHistory]);
+
+    const loadMoreHistory = useCallback(() => {
+      if (loadingMoreHistory || !hasMoreHistory) return;
+      setLoadingMoreHistory(true);
+
+      const nextOffset = historyOffset;
+      fetch('/apps/chat/api/sessions/history?limit=' + HISTORY_PAGE_SIZE + '&offset=' + nextOffset)
+        .then(r => {
+          if (!r.ok) throw new Error('load more failed: ' + r.status);
+          return r.json();
+        })
+        .then(data => {
+          const rows = Array.isArray(data?.sessions) ? data.sessions : [];
+          setHasMoreHistory(!!data?.has_more);
+          setHistoryOffset(nextOffset + rows.length);
+
+          if (!rows.length) return;
+
+          setSessions(prev => {
+            const next = new Map(prev);
+            const sessionKeyById = new Map();
+            for (const [key, session] of next.entries()) {
+              if (session && session.sessionId) {
+                sessionKeyById.set(session.sessionId, key);
+              }
+            }
+
+            let changed = false;
+            for (const s of rows) {
+              if (!s || !s.session_id) continue;
+              const messageCount = Number(s.message_count) || 0;
+              if (messageCount <= 0 && !s.last_user_message) continue;
+
+              const sessionId = s.session_id;
+              if (sessionKeyById.has(sessionId)) continue; // already loaded
+
+              const revision = typeof s.revision === 'string' ? s.revision : null;
+              const parentSessionId = normalizeSessionParentId(s.parent_session_id);
+              const spawnAgent = (typeof s.spawn_agent === 'string' && s.spawn_agent) || null;
+              if (parentSessionId) sessionParentByIdRef.current[sessionId] = parentSessionId;
+              if (spawnAgent) childAgentRef.current[sessionId] = spawnAgent;
+
+              const historyKey = 'history-' + sessionId;
+              if (next.has(historyKey)) continue;
+              next.set(historyKey, {
+                source: 'history',
+                status: 'history',
+                sessionId,
+                cwd: s.cwd || '~',
+                turnCount: messageCount,
+                savedTurnCount: messageCount,
+                messageCount,
+                lastUserMessage: s.last_user_message || null,
+                lastUpdated: s.last_updated || null,
+                name: s.name || null,
+                description: s.description || null,
+                knownRevision: revision,
+                remoteRevision: revision,
+                hasExternalUpdate: false,
+                isNewSession: false,
+                parentSessionId,
+                spawnAgent,
+              });
+              sessionKeyById.set(sessionId, historyKey);
+              changed = true;
+            }
+
+            return changed ? next : prev;
+          });
+        })
+        .catch(err => {
+          console.warn('[chat] failed to load more history', err);
+        })
+        .finally(() => {
+          setLoadingMoreHistory(false);
+        });
+    }, [historyOffset, hasMoreHistory, loadingMoreHistory]);
+
     const handleTogglePin = useCallback(async (sessionId, currentlyPinned) => {
       if (currentlyPinned) {
         const card = document.querySelector('[data-session-id="' + sessionId + '"]');
@@ -3547,19 +3618,19 @@
     }, [connect, syncSessionHistory]);
 
     useEffect(() => {
-      const onFocus = () => discoverNewHistorySessions();
+      const onFocus = () => refreshHistory();
       const onVisibility = () => {
         if (document.visibilityState === 'visible') {
           const rs = wsRef.current?.readyState;
           if (rs == null || rs === WebSocket.CLOSED || rs === WebSocket.CLOSING) {
             connect(activeKeyRef.current);
           }
-          discoverNewHistorySessions();
+          refreshHistory();
         }
       };
       const intervalId = window.setInterval(() => {
-        discoverNewHistorySessions();
-      }, 30000);
+        refreshHistory();
+      }, 10000);
 
       window.addEventListener('focus', onFocus);
       document.addEventListener('visibilitychange', onVisibility);
@@ -3568,7 +3639,7 @@
         window.removeEventListener('focus', onFocus);
         document.removeEventListener('visibilitychange', onVisibility);
       };
-    }, [connect, discoverNewHistorySessions]);
+    }, [connect, refreshHistory]);
 
     useEffect(() => {
       if (sessionSortMode !== 'directory') return;
@@ -4219,148 +4290,10 @@
       }
     }, [sessions, handleWsMessage, resumeHistorySession]);
 
-    const pollSessionRevisions = useCallback(() => {
-      if (revisionPollInFlightRef.current) return;
-
-      const ids = [];
-      const seen = new Set();
-      const knownRevisions = {};
-      const activeSession = activeKeyRef.current
-        ? sessionsRef.current.get(activeKeyRef.current)
-        : null;
-      const activeSessionId = (activeSession && activeSession.sessionId) || null;
-      for (const session of sessionsRef.current.values()) {
-        if (!session || !session.sessionId) continue;
-        if (seen.has(session.sessionId)) continue;
-        const isActiveSessionId = activeSessionId && session.sessionId === activeSessionId;
-        const ws = session.ws;
-        if (
-          ws
-          && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
-          && !isActiveSessionId
-        ) {
-          continue;
-        }
-        seen.add(session.sessionId);
-        ids.push(session.sessionId);
-        knownRevisions[session.sessionId] = typeof session.knownRevision === 'string'
-          ? session.knownRevision
-          : null;
-      }
-      if (ids.length === 0) return;
-
-      revisionPollInFlightRef.current = true;
-      const payload = {
-        limit: Math.max(300, ids.length + 20),
-        session_ids: ids,
-        known_revisions: knownRevisions,
-      };
-
-      fetch('/apps/chat/api/sessions/revisions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-        .then(r => {
-          if (!r.ok) throw new Error('revision fetch failed: ' + r.status);
-          return r.json();
-        })
-        .then(data => {
-          const rows = Array.isArray(data?.changed) ? data.changed : [];
-          const removed = Array.isArray(data?.removed) ? data.removed : [];
-          if (!rows.length && !removed.length) return;
-          const byId = new Map(
-            rows
-              .filter(r => r && typeof r.session_id === 'string')
-              .map(r => [r.session_id, r])
-          );
-          const removedIds = new Set(
-            removed.filter(v => typeof v === 'string')
-          );
-
-          setSessions(prev => {
-            let changed = false;
-            const next = new Map(prev);
-            for (const [key, session] of next.entries()) {
-              if (!session || !session.sessionId) continue;
-
-              if (removedIds.has(session.sessionId)) {
-                if (session.remoteRevision === null) continue;
-                next.set(key, {
-                  ...session,
-                  remoteRevision: null,
-                });
-                changed = true;
-                continue;
-              }
-
-              const row = byId.get(session.sessionId);
-              if (!row || typeof row.revision !== 'string') continue;
-
-              const remoteRevision = row.revision;
-              const currentKnown = session.knownRevision ?? null;
-              // Never advance knownRevision in the poll — null means "never reviewed
-              // by this client". Only set a baseline when the user opens the session.
-              const nextKnown = currentKnown;
-              const hasExternalUpdate = currentKnown === null
-                ? (remoteRevision !== null)   // never reviewed: badge if has content
-                : currentKnown !== remoteRevision; // reviewed before: badge if changed
-              const nextUpdatedAt = row.last_updated || session.lastUpdated || null;
-              // Pick up name/description from revision scan (written by naming hook)
-              const nextName = row.name || session.name || null;
-              const nextDescription = row.description || session.description || null;
-
-              if (
-                session.remoteRevision === remoteRevision
-                && session.knownRevision === nextKnown
-                && !!session.hasExternalUpdate === hasExternalUpdate
-                && session.lastUpdated === nextUpdatedAt
-                && session.name === nextName
-                && session.description === nextDescription
-              ) {
-                continue;
-              }
-
-              next.set(key, {
-                ...session,
-                remoteRevision,
-                knownRevision: nextKnown,
-                hasExternalUpdate,
-                lastUpdated: nextUpdatedAt,
-                name: nextName,
-                description: nextDescription,
-              });
-              changed = true;
-            }
-            return changed ? next : prev;
-          });
-        })
-        .catch(err => {
-          if (String(err?.message || '').includes('401')) return;
-          console.warn('[chat] failed to poll session revisions', err);
-        })
-        .finally(() => {
-          revisionPollInFlightRef.current = false;
-        });
-    }, []);
-
-    useEffect(() => {
-      pollSessionRevisions();
-      const intervalId = window.setInterval(pollSessionRevisions, 7000);
-      const onFocus = () => pollSessionRevisions();
-      const onVisibility = () => {
-        if (document.visibilityState === 'visible') {
-          pollSessionRevisions();
-        }
-      };
-      window.addEventListener('focus', onFocus);
-      document.addEventListener('visibilitychange', onVisibility);
-      return () => {
-        window.clearInterval(intervalId);
-        window.removeEventListener('focus', onFocus);
-        document.removeEventListener('visibilitychange', onVisibility);
-      };
-    }, [pollSessionRevisions]);
+    // NOTE: pollSessionRevisions removed — consolidated into the 10s
+    // history re-poll (refreshHistory).  The history endpoint now returns
+    // name, description, revision, and last_updated which covers the same
+    // data that the revisions endpoint provided.
 
     useEffect(() => {
       if (!activeKey) return;
@@ -4725,6 +4658,15 @@
                       ${unpinnedEntries.map(entry => renderSessionTreeEntry(entry))}
                     `
                 }
+                ${hasMoreHistory && html`
+                  <button
+                    class="session-load-more"
+                    onClick=${loadMoreHistory}
+                    disabled=${loadingMoreHistory}
+                  >
+                    ${loadingMoreHistory ? 'Loading...' : 'Load more sessions'}
+                  </button>
+                `}
               `;
             })()}
           </div>
