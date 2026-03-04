@@ -6,7 +6,6 @@ PAM authentication and signed session cookies.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Cookie, Request, Response
@@ -17,8 +16,6 @@ from amplifier_distro.server.auth import (
     create_session_token,
     verify_session_token,
 )
-
-logger = logging.getLogger(__name__)
 
 COOKIE_NAME = "amplifier_session"
 

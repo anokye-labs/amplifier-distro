@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from amplifier_distro.server.auth_routes import create_auth_router
 from fastapi import FastAPI
 
 from amplifier_distro.server.auth import (
@@ -15,6 +14,7 @@ from amplifier_distro.server.auth import (
     is_auth_applicable,
     verify_session_token,
 )
+from amplifier_distro.server.auth_routes import create_auth_router
 
 
 class TestAuthenticatePam:
@@ -250,7 +250,7 @@ class TestLoginRoute:
 
         assert resp.status_code == 401
         body = resp.json()
-        assert "error" in body or "detail" in body
+        assert body["error"] == "Authentication failed"
 
 
 class TestAuthMeRoute:
@@ -268,10 +268,8 @@ class TestAuthMeRoute:
         cookie_value = login_resp.cookies["amplifier_session"]
 
         # Use cookie to access /auth/me
-        resp = await auth_client.get(
-            "/auth/me",
-            cookies={"amplifier_session": cookie_value},
-        )
+        auth_client.cookies.set("amplifier_session", cookie_value)
+        resp = await auth_client.get("/auth/me")
 
         assert resp.status_code == 200
         body = resp.json()
@@ -299,9 +297,9 @@ class TestLogoutRoute:
         cookie_value = login_resp.cookies["amplifier_session"]
 
         # Now logout
+        auth_client.cookies.set("amplifier_session", cookie_value)
         resp = await auth_client.post(
             "/logout",
-            cookies={"amplifier_session": cookie_value},
             follow_redirects=False,
         )
 
