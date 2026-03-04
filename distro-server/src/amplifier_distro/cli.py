@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import click
+import click.core
 
 from . import conventions
 
@@ -122,6 +123,12 @@ def serve_cmd(
     # --ssl-certfile implies manual TLS mode when tls_mode is still default
     if tls_mode == "off" and ssl_certfile:
         tls_mode = "manual"
+    # Detect whether --tls was explicitly provided by the user (vs defaulted to "off").
+    # When explicit, honour the value as-is (including --tls off as escape hatch).
+    tls_explicit = (
+        click.get_current_context().get_parameter_source("tls_mode")
+        == click.core.ParameterSource.COMMANDLINE
+    )
     _run_foreground(
         host,
         port,
@@ -130,6 +137,7 @@ def serve_cmd(
         dev,
         stub=stub,
         tls_mode=tls_mode,
+        tls_explicit=tls_explicit,
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
         no_auth=no_auth,
