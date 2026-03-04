@@ -108,6 +108,7 @@ def serve_cmd(
     # --ssl-certfile implies manual TLS mode when tls_mode is still default
     if tls_mode == "off" and ssl_certfile:
         tls_mode = "manual"
+    # TODO: wire no_auth to auth middleware
     _run_foreground(
         host,
         port,

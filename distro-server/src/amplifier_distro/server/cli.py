@@ -106,6 +106,7 @@ def serve(
     if tls_mode == "off" and ssl_certfile:
         tls_mode = "manual"
     if ctx.invoked_subcommand is None:
+        # TODO: wire no_auth to auth middleware
         _run_foreground(
             host,
             port,
