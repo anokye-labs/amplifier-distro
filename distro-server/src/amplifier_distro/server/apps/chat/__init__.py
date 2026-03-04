@@ -219,12 +219,20 @@ async def websocket_endpoint(ws: WebSocket) -> None:
 
 @router.get("/api/sessions/history", dependencies=[Depends(_require_api_key)])
 async def list_session_history(
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> dict:
-    """Return lightweight metadata for all sessions discovered on disk."""
+    """Return lightweight metadata for sessions discovered on disk.
+
+    Supports pagination via *limit* and *offset*.  The response includes
+    ``has_more`` so the frontend knows whether to offer a "Load more" action.
+    """
     pinned_ids = await asyncio.to_thread(load_pins)
-    sessions = await asyncio.to_thread(
-        scan_sessions, limit=limit, pinned_ids=pinned_ids
+    sessions, total_count = await asyncio.to_thread(
+        scan_sessions,
+        limit=limit,
+        offset=offset,
+        pinned_ids=pinned_ids,
     )
     sessions = [
         row
@@ -233,7 +241,11 @@ async def list_session_history(
     ]
     for row in sessions:
         row["pinned"] = row["session_id"] in pinned_ids
-    return {"sessions": sessions[:limit]}
+    return {
+        "sessions": sessions[:limit],
+        "has_more": offset + limit < total_count,
+        "total_count": total_count,
+    }
 
 
 @router.get("/api/sessions/pins", dependencies=[Depends(_require_api_key)])

@@ -93,7 +93,7 @@ class TestScanSessions:
     def test_returns_empty_list_when_no_projects_dir(self, tmp_home):
         from amplifier_distro.server.apps.chat.session_history import scan_sessions
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert result == []
 
     def test_returns_session_with_transcript(self, tmp_home):
@@ -109,7 +109,7 @@ class TestScanSessions:
             ],
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert len(result) == 1
         s = result[0]
@@ -139,7 +139,7 @@ class TestScanSessions:
             ],
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert result[0]["last_user_message"] == "follow-up question"
 
@@ -158,7 +158,7 @@ class TestScanSessions:
             encoding="utf-8",
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert result[0]["cwd"] == "/Users/alice/repo/amplifier-distro"
 
@@ -168,7 +168,7 @@ class TestScanSessions:
 
         _make_session(tmp_home, "-Users-test", "no-transcript", lines=None)
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert len(result) == 1
         s = result[0]
@@ -186,7 +186,7 @@ class TestScanSessions:
             encoding="utf-8",
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert len(result) == 1
         assert result[0]["message_count"] == 1
@@ -216,7 +216,7 @@ class TestScanSessions:
             ],
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert result[0]["session_id"] == "newer-session"
         assert result[1]["session_id"] == "older-session"
@@ -234,7 +234,7 @@ class TestScanSessions:
             ],
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert len(result[0]["last_user_message"]) == 120
 
@@ -246,7 +246,7 @@ class TestScanSessions:
         projects.mkdir(parents=True)
         (projects / "not-a-dir.txt").write_text("ignore me")
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         assert result == []
 
@@ -265,7 +265,7 @@ class TestScanSessions:
             ],
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
 
         # turn_count counts user messages only (matching MetadataSaveHook)
         assert result[0]["message_count"] == 1
@@ -288,7 +288,7 @@ class TestScanSessions:
                 },
             ],
         )
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert result[0]["last_user_message"] == "now do the next thing"
 
     def test_last_user_message_not_clobbered_by_tool_result_turn(self, tmp_home):
@@ -313,7 +313,7 @@ class TestScanSessions:
                 },
             ],
         )
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert result[0]["last_user_message"] == "please rename the file"
 
     def test_empty_cwd_from_info_falls_back_to_decode(self, tmp_home):
@@ -331,7 +331,7 @@ class TestScanSessions:
         (session_dir / "session-info.json").write_text(
             json.dumps({"working_dir": ""}), encoding="utf-8"
         )
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert result[0]["cwd"] == "/Users/test"
 
     def test_malformed_session_info_json_falls_back_to_decode(self, tmp_home):
@@ -349,7 +349,7 @@ class TestScanSessions:
         (session_dir / "session-info.json").write_text(
             "{not valid json", encoding="utf-8"
         )
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert result[0]["cwd"] == "/Users/test"
 
     def test_skips_file_inside_sessions_dir(self, tmp_home):
@@ -365,7 +365,7 @@ class TestScanSessions:
             "real-session",
             lines=[{"role": "user", "content": "hi"}],
         )
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert len(result) == 1
         assert result[0]["session_id"] == "real-session"
 
@@ -382,7 +382,7 @@ class TestScanSessions:
         projects_dir.mkdir(parents=True, exist_ok=True)
         (projects_dir / "escaped-link").symlink_to(target)
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert result == []  # symlink escape caught, nothing returned
 
     def test_skips_session_with_invalid_id_characters(self, tmp_home):
@@ -401,7 +401,7 @@ class TestScanSessions:
             lines=[{"role": "user", "content": "hi"}],
         )
 
-        result = scan_sessions()
+        result, _total = scan_sessions()
         assert len(result) == 1
         assert result[0]["session_id"] == "valid-session"
 

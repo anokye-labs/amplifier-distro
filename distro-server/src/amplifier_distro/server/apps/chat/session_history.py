@@ -311,17 +311,20 @@ def scan_sessions(
     amplifier_home: str | None = None,
     *,
     limit: int = 0,
+    offset: int = 0,
     pinned_ids: set[str] | None = None,
-) -> list[dict[str, Any]]:
-    """Scan ~/.amplifier/projects/ and return lightweight metadata for all sessions.
+) -> tuple[list[dict[str, Any]], int]:
+    """Scan ~/.amplifier/projects/ and return lightweight metadata for sessions.
 
-    Returns a list sorted newest-first by last_updated.
-    Never raises — malformed sessions are included with degraded metadata.
+    Returns ``(sessions, total_count)`` where *sessions* is sorted
+    newest-first by last_updated and *total_count* is the total number
+    of session directories on disk (before limit/offset).
 
-    When *limit* > 0, only the newest *limit* session directories (plus any
-    whose session_id appears in *pinned_ids*) are fully read.  The remaining
-    directories are skipped, avoiding expensive metadata/transcript I/O for
-    sessions that would be sliced away by the caller anyway.
+    When *limit* > 0, only the session directories in the
+    ``[offset : offset+limit]`` mtime window (plus any whose session_id
+    appears in *pinned_ids*) are fully read.  Pinned sessions are always
+    included in the first page (offset == 0) regardless of their mtime
+    position.
 
     Session directories are read in parallel using a thread pool since each
     read is I/O-bound (stat + small JSON file reads + transcript tail seek).
@@ -330,28 +333,27 @@ def scan_sessions(
     projects_path = Path(home).expanduser() / PROJECTS_DIR
     session_dirs = _iter_session_dirs(projects_path)
 
+    total_count = len(session_dirs)
     if not session_dirs:
-        return []
+        return [], 0
 
     # When a limit is set, stat all dirs for mtime (very cheap — ~0.03s for
-    # 5000 dirs) then only fully read the top N + any pinned sessions.
+    # 5000 dirs) then only fully read the requested window + pinned sessions.
     if limit > 0:
         pinned = pinned_ids or set()
         scored = [(sd, _stat_mtime(sd)) for sd in session_dirs]
         scored.sort(key=lambda x: x[1], reverse=True)
 
-        selected: list[Path] = []
-        selected_ids: set[str] = set()
-        for sd, _mtime in scored:
-            if len(selected) < limit or sd.name in pinned:
-                selected.append(sd)
-                selected_ids.add(sd.name)
+        window = scored[offset : offset + limit]
+        selected: list[Path] = [sd for sd, _mtime in window]
+        selected_ids: set[str] = {sd.name for sd in selected}
 
-        # Include any pinned sessions that fell outside the top N
-        for sd, _mtime in scored:
-            if sd.name in pinned and sd.name not in selected_ids:
-                selected.append(sd)
-                selected_ids.add(sd.name)
+        # Include pinned sessions on the first page regardless of mtime
+        if offset == 0:
+            for sd, _mtime in scored:
+                if sd.name in pinned and sd.name not in selected_ids:
+                    selected.append(sd)
+                    selected_ids.add(sd.name)
 
         session_dirs = selected
 
@@ -374,7 +376,7 @@ def scan_sessions(
         results = [r for r in pool.map(_process, session_dirs) if r is not None]
 
     results.sort(key=lambda s: s["last_updated"], reverse=True)
-    return results
+    return results, total_count
 
 
 def scan_session_revisions(
