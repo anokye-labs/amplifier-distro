@@ -2747,6 +2747,25 @@
       const ownerKey = sourceKey || activeKeyRef.current;
       const isActiveStream = ownerKey === activeKeyRef.current;
       if (!ownerKey) return;
+
+      // user_message: broadcast from another client's prompt submission.
+      // Handled before the active/background split so it works for both.
+      // The originating browser already added the message optimistically
+      // in sendMessage(), so skip if the latest user item matches.
+      if (msg.type === 'user_message') {
+        const umContent = msg.content || '';
+        setChronoItems(prev => {
+          const lastUser = [...prev].reverse().find(i => i.role === 'user' && i.type === 'text');
+          if (lastUser && lastUser.content === umContent) return prev;
+          return [...prev, {
+            id: makeId(), type: 'text', role: 'user',
+            content: umContent, streaming: false,
+            order: orderCounterRef.current++,
+          }];
+        });
+        return;
+      }
+
       if (!isActiveStream) {
         // Keep session list metadata live even when this session is in
         // background, and queue renderable events for later replay.
@@ -3397,7 +3416,10 @@
 
               const cur = next.get(existingKey) || {};
               const remoteRevision = revision ?? cur.remoteRevision ?? null;
-              const knownRevision = cur.knownRevision == null ? remoteRevision : cur.knownRevision;
+              // For live sessions (active WS), keep knownRevision in sync with
+              // disk so the "Updated" badge doesn't flicker — WS delivers content.
+              const isLive = cur.source === 'live';
+              const knownRevision = (cur.knownRevision == null || isLive) ? remoteRevision : cur.knownRevision;
               const hasExternalUpdate = !!cur.hasExternalUpdate
                 || (
                   knownRevision != null
@@ -4300,6 +4322,8 @@
       const active = sessions.get(activeKey);
       if (!active || !active.sessionId || !active.hasExternalUpdate) return;
       if (executing || active.status === 'running' || active.status === 'loading_history') return;
+      // Live sessions get all content via WebSocket — skip disk refresh.
+      if (active.source === 'live') return;
 
       const now = Date.now();
       const lastAt = Number(autoDiskRefreshAtRef.current[activeKey] || 0);

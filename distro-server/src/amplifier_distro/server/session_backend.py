@@ -1101,6 +1101,33 @@ class FoundationBackend:
         handle = self._sessions.get(session_id)
         return handle.hook_unregister if handle else None
 
+    def broadcast_user_message(
+        self,
+        session_id: str,
+        content: str,
+        images: list[str] | None = None,
+    ) -> None:
+        """Broadcast a user message through the fanout so other clients see it.
+
+        The originating client already has the message in its local UI
+        (added optimistically in sendMessage).  This pushes a
+        ``user_message`` event to all *other* connected queues so they
+        can display it.
+        """
+        holder = self._queue_holders.get(session_id)
+        if holder is None:
+            return
+        try:
+            data: dict[str, Any] = {"content": content}
+            if images:
+                data["images"] = images
+            holder.put_nowait(("user_message", data))
+        except asyncio.QueueFull:
+            logger.warning(
+                "Event queue full, dropping user_message for session %s",
+                session_id,
+            )
+
     def dequeue_client(self, session_id: str, queue: asyncio.Queue) -> None:
         """Remove a client's event queue from the fanout set for a session.
 

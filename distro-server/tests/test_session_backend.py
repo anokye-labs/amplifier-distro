@@ -1675,6 +1675,82 @@ class TestQueueRewire:
         # Should not raise
         backend.dequeue_client("nonexistent", asyncio.Queue())
 
+    # ------------------------------------------------------------------
+    # broadcast_user_message: user input fanout to other clients
+    # ------------------------------------------------------------------
+
+    def test_broadcast_user_message_delivers_to_all_queues(self):
+        """broadcast_user_message must push user_message to all queues."""
+        backend = self._make_wired_backend()
+        session = self._make_mock_session()
+        session_id = "test-user-msg"
+
+        handle = MagicMock()
+        handle.session = session
+        handle.hook_unregister = None
+        backend._sessions[session_id] = handle
+
+        queue_a = asyncio.Queue()
+        queue_b = asyncio.Queue()
+        backend._wire_event_queue(session, session_id, queue_a)
+        backend._wire_event_queue(session, session_id, queue_b)
+
+        backend.broadcast_user_message(session_id, "hello world")
+
+        for q in (queue_a, queue_b):
+            assert q.qsize() == 1
+            event_name, data = q.get_nowait()
+            assert event_name == "user_message"
+            assert data["content"] == "hello world"
+
+    def test_broadcast_user_message_includes_images(self):
+        """broadcast_user_message must include images when provided."""
+        backend = self._make_wired_backend()
+        session = self._make_mock_session()
+        session_id = "test-user-msg-img"
+
+        handle = MagicMock()
+        handle.session = session
+        handle.hook_unregister = None
+        backend._sessions[session_id] = handle
+
+        queue = asyncio.Queue()
+        backend._wire_event_queue(session, session_id, queue)
+
+        backend.broadcast_user_message(
+            session_id, "look at this", images=["data:image/png;base64,abc"]
+        )
+
+        event_name, data = queue.get_nowait()
+        assert event_name == "user_message"
+        assert data["content"] == "look at this"
+        assert data["images"] == ["data:image/png;base64,abc"]
+
+    def test_broadcast_user_message_noop_for_unknown_session(self):
+        """broadcast_user_message must not raise for unknown sessions."""
+        backend = self._make_wired_backend()
+        # Should not raise
+        backend.broadcast_user_message("nonexistent", "hello")
+
+    def test_broadcast_user_message_no_images_key_when_none(self):
+        """broadcast_user_message must omit images key when not provided."""
+        backend = self._make_wired_backend()
+        session = self._make_mock_session()
+        session_id = "test-no-img"
+
+        handle = MagicMock()
+        handle.session = session
+        handle.hook_unregister = None
+        backend._sessions[session_id] = handle
+
+        queue = asyncio.Queue()
+        backend._wire_event_queue(session, session_id, queue)
+
+        backend.broadcast_user_message(session_id, "no images")
+
+        _, data = queue.get_nowait()
+        assert "images" not in data
+
 
 class TestQueueHolder:
     """Unit tests for the _QueueHolder fanout wrapper."""
