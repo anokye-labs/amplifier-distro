@@ -218,7 +218,11 @@ def _read_session_meta(session_dir: Path) -> dict[str, Any]:
 def _session_revision_signature(session_dir: Path) -> tuple[str, str]:
     """Return (last_updated_iso, revision_signature) for one session directory."""
     transcript_path = session_dir / TRANSCRIPT_FILENAME
-    stat_target = transcript_path if transcript_path.exists() else session_dir
+    if not transcript_path.exists():
+        # No transcript yet — return a stable null revision so the frontend
+        # doesn't think there's content to fetch (which would 404).
+        return datetime.now(tz=UTC).isoformat(), "0:0"
+    stat_target = transcript_path
     try:
         stat = stat_target.stat()
         last_updated = datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat()

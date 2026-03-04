@@ -535,3 +535,48 @@ class TestPinEndpoints:
         sessions = resp.json()["sessions"]
         session = next(s for s in sessions if s["session_id"] == "session-xyz")
         assert session["pinned"] is False
+
+
+class TestSessionRevisionSignature:
+    """Tests for _session_revision_signature guard."""
+
+    def test_no_transcript_returns_zero_revision(self, tmp_path):
+        """Session dir with no transcript.jsonl must return '0:0' revision."""
+        from amplifier_distro.server.apps.chat.session_history import (
+            _session_revision_signature,
+        )
+
+        session_dir = tmp_path / "test-session"
+        session_dir.mkdir()
+        # No transcript.jsonl created
+
+        last_updated, revision = _session_revision_signature(session_dir)
+        assert revision == "0:0", "No transcript must yield '0:0' revision"
+
+    def test_with_transcript_returns_real_revision(self, tmp_path):
+        """Session dir with transcript.jsonl must return a real revision."""
+        from amplifier_distro.server.apps.chat.session_history import (
+            _session_revision_signature,
+        )
+
+        session_dir = tmp_path / "test-session"
+        session_dir.mkdir()
+        transcript = session_dir / "transcript.jsonl"
+        transcript.write_text('{"role": "user", "content": "hello"}\n')
+
+        last_updated, revision = _session_revision_signature(session_dir)
+        assert revision != "0:0", "Real transcript must yield non-zero revision"
+        assert ":" in revision, "Revision must be mtime_ns:size format"
+
+    def test_no_transcript_revision_is_stable(self, tmp_path):
+        """Repeated calls with no transcript must return the same '0:0'."""
+        from amplifier_distro.server.apps.chat.session_history import (
+            _session_revision_signature,
+        )
+
+        session_dir = tmp_path / "test-session"
+        session_dir.mkdir()
+
+        _, rev1 = _session_revision_signature(session_dir)
+        _, rev2 = _session_revision_signature(session_dir)
+        assert rev1 == rev2 == "0:0"

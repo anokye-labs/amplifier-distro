@@ -397,6 +397,11 @@ class ChatConnection:
             )
             return
 
+        # Broadcast the user message through the fanout so other connected
+        # browsers see it.  The originating browser already has it in its
+        # local UI (added optimistically in sendMessage).
+        self._backend.broadcast_user_message(self._session_id, content, images)
+
         try:
             await self._backend.execute(self._session_id, content, images)
         except Exception:  # noqa: BLE001
@@ -670,6 +675,12 @@ class ChatConnection:
                             if delta_msg is not None:
                                 await self._ws.send_json(delta_msg)
                     self._seen_deltas.discard(local_idx)
+
+                # user_message is a custom fanout event (not a kernel event),
+                # so it bypasses the translator and is sent directly.
+                if event_name == "user_message":
+                    await self._ws.send_json({"type": "user_message", **data})
+                    continue
 
                 msg = self._translator.translate(event_name, data)
                 if msg is not None:

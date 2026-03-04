@@ -970,3 +970,77 @@ class TestOriginCheck:
 	            await conn._auth_handshake()
 
 	        ws.close.assert_awaited_once_with(4003, "Forbidden origin")
+
+
+class TestUserMessageFanout:
+    """Tests for user_message event bypass in _event_fanout_loop."""
+
+    @pytest.mark.asyncio
+    async def test_user_message_bypasses_translator(self):
+        """user_message events must be sent directly, not via translator."""
+        from amplifier_distro.server.apps.chat.connection import ChatConnection
+
+        ws = make_ws([])
+        backend = make_backend()
+        config = make_config()
+
+        conn = ChatConnection(ws, backend, config)
+        await conn.event_queue.put(
+            ("user_message", {"content": "hello from another browser"})
+        )
+        await conn.event_queue.put(_STOP)
+
+        await conn._event_fanout_loop()
+
+        sent = [call.args[0] for call in ws.send_json.await_args_list]
+        user_msgs = [m for m in sent if m.get("type") == "user_message"]
+        assert len(user_msgs) == 1
+        assert user_msgs[0]["content"] == "hello from another browser"
+
+    @pytest.mark.asyncio
+    async def test_user_message_includes_images(self):
+        """user_message events must include images when present."""
+        from amplifier_distro.server.apps.chat.connection import ChatConnection
+
+        ws = make_ws([])
+        backend = make_backend()
+        config = make_config()
+
+        conn = ChatConnection(ws, backend, config)
+        await conn.event_queue.put(
+            ("user_message", {"content": "look", "images": ["img1.png"]})
+        )
+        await conn.event_queue.put(_STOP)
+
+        await conn._event_fanout_loop()
+
+        sent = [call.args[0] for call in ws.send_json.await_args_list]
+        user_msgs = [m for m in sent if m.get("type") == "user_message"]
+        assert len(user_msgs) == 1
+        assert user_msgs[0]["content"] == "look"
+        assert user_msgs[0]["images"] == ["img1.png"]
+
+    @pytest.mark.asyncio
+    async def test_user_message_does_not_block_subsequent_events(self):
+        """Events after user_message must still be processed normally."""
+        from amplifier_distro.server.apps.chat.connection import ChatConnection
+
+        ws = make_ws([])
+        backend = make_backend()
+        config = make_config()
+
+        conn = ChatConnection(ws, backend, config)
+        await conn.event_queue.put(
+            ("user_message", {"content": "hello"})
+        )
+        await conn.event_queue.put(
+            ("orchestrator:complete", {"turn_count": 1})
+        )
+        await conn.event_queue.put(_STOP)
+
+        await conn._event_fanout_loop()
+
+        sent = [call.args[0] for call in ws.send_json.await_args_list]
+        types = [m.get("type") for m in sent]
+        assert "user_message" in types
+        assert "prompt_complete" in types
