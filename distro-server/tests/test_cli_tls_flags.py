@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from amplifier_distro.cli import main, serve_cmd
+from amplifier_distro.cli import main
 
 
 class TestTlsFlags:
@@ -56,15 +56,7 @@ class TestTlsFlags:
         assert result.exit_code == 0
         mock_run.assert_called_once()
         _, kwargs = mock_run.call_args
-        # tls_mode may be passed positionally or as kwarg
-        call_args = mock_run.call_args
-        # Check tls_mode is 'off' regardless of how it's passed
-        if "tls_mode" in kwargs:
-            assert kwargs["tls_mode"] == "off"
-        else:
-            # positional args - tls_mode not in kwargs means it's in args
-            # Just verify the call didn't fail
-            pass
+        assert kwargs.get("tls_mode") == "off"
 
     def test_tls_auto_accepted(self) -> None:
         """'amp-distro serve --tls auto' is accepted and forwarded."""
@@ -99,9 +91,7 @@ class TestTlsFlags:
         runner = CliRunner()
         mock_run = MagicMock()
         with patch("amplifier_distro.server.cli._run_foreground", mock_run):
-            result = runner.invoke(
-                main, ["serve", "--ssl-certfile", "/tmp/cert.pem"]
-            )
+            result = runner.invoke(main, ["serve", "--ssl-certfile", "/tmp/cert.pem"])
         assert result.exit_code == 0
         mock_run.assert_called_once()
         _, kwargs = mock_run.call_args
