@@ -290,6 +290,83 @@ class TestProvisionCert:
         ):
             assert tailscale.provision_cert(cert_dir) is None
 
+    def test_access_denied_shows_operator_fix(self, tmp_path: Path, capsys):
+        """'access denied' stderr → fix mentions sudo tailscale set --operator."""
+        cert_dir = tmp_path / "certs"
+        cert_dir.mkdir()
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[],
+                    returncode=1,
+                    stdout="",
+                    stderr="access denied: permission error",
+                ),
+            ),
+        ):
+            result = tailscale.provision_cert(cert_dir)
+            assert result is None
+            captured = capsys.readouterr()
+            assert "sudo tailscale set --operator=$USER" in captured.out
+            assert "permission" in captured.out.lower()
+
+    def test_does_not_support_shows_https_admin_fix(self, tmp_path: Path, capsys):
+        """'does not support' stderr → fix mentions admin console HTTPS setting."""
+        cert_dir = tmp_path / "certs"
+        cert_dir.mkdir()
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[],
+                    returncode=1,
+                    stdout="",
+                    stderr="box.ts.net does not support getting TLS certs",
+                ),
+            ),
+        ):
+            result = tailscale.provision_cert(cert_dir)
+            assert result is None
+            captured = capsys.readouterr()
+            assert "admin console" in captured.out.lower()
+            assert "HTTPS" in captured.out
+
+    def test_other_error_shows_raw_stderr_without_detail_prefix(
+        self, tmp_path: Path, capsys
+    ):
+        """Unknown errors show the raw stderr, not prefixed with 'Detail:'."""
+        cert_dir = tmp_path / "certs"
+        cert_dir.mkdir()
+        with (
+            patch(
+                "amplifier_distro.tailscale.get_dns_name",
+                return_value="box.ts.net",
+            ),
+            patch(
+                "amplifier_distro.tailscale.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[],
+                    returncode=1,
+                    stdout="",
+                    stderr="some unexpected failure",
+                ),
+            ),
+        ):
+            result = tailscale.provision_cert(cert_dir)
+            assert result is None
+            captured = capsys.readouterr()
+            assert "some unexpected failure" in captured.out
+            assert "Detail:" not in captured.out
+
     def test_creates_cert_dir_if_missing(self, tmp_path: Path):
         cert_dir = tmp_path / "new" / "certs"
         with (

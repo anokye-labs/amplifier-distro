@@ -147,6 +147,30 @@ class TestResolveCert:
             assert cert_path.exists()
             assert key_path.exists()
 
+    def test_auto_self_signed_fallback_no_operator_hint(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        """Self-signed fallback should NOT suggest sudo tailscale set --operator."""
+        with patch(
+            "amplifier_distro.server.tls.tailscale.provision_cert",
+            return_value=None,
+        ):
+            resolve_cert(mode="auto", cert_dir=tmp_path)
+            captured = capsys.readouterr()
+            assert "--operator" not in captured.out
+
+    def test_auto_self_signed_fallback_mentions_admin_console(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        """Self-signed fallback should mention Tailscale admin console."""
+        with patch(
+            "amplifier_distro.server.tls.tailscale.provision_cert",
+            return_value=None,
+        ):
+            resolve_cert(mode="auto", cert_dir=tmp_path)
+            captured = capsys.readouterr()
+            assert "admin console" in captured.out.lower()
+
     def test_auto_uses_default_cert_dir(self) -> None:
         """When cert_dir is None, auto mode uses conventions.DISTRO_CERTS_DIR."""
         ts_cert = Path("/tmp/ts.crt")

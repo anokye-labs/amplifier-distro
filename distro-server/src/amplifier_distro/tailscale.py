@@ -118,7 +118,6 @@ def provision_cert(cert_dir: Path) -> tuple[Path, Path] | None:
         if result.returncode != 0:
             stderr = result.stderr.strip()
             logger.warning("tailscale cert failed: %s", stderr)
-            # Surface the fix prominently for the user
             import click
 
             click.echo("")
@@ -129,13 +128,22 @@ def provision_cert(cert_dir: Path) -> tuple[Path, Path] | None:
                     bold=True,
                 )
             )
-            if "operator" in stderr.lower() or "access denied" in stderr.lower():
+            if "access denied" in stderr.lower():
+                click.echo("  Your user doesn't have permission to request certs.")
+                click.echo("  Fix: Run once then restart the server:")
                 click.echo(
-                    "  Fix: Run 'sudo tailscale set --operator=$USER'"
-                    " once, then restart."
+                    click.style("    sudo tailscale set --operator=$USER", bold=True)
+                )
+            elif "does not support" in stderr.lower():
+                click.echo(
+                    "  HTTPS certificates are not enabled for your Tailscale account."
+                )
+                click.echo("  Fix: Enable HTTPS in Tailscale admin console:")
+                click.echo(
+                    click.style("    Admin console → DNS → Enable HTTPS", bold=True)
                 )
             else:
-                click.echo(f"  Detail: {stderr}")
+                click.echo(f"  {stderr}")
             click.echo("")
             return None
 
