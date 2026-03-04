@@ -5,25 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amplifier - Connect Slack</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script src="/static/theme-init.js"></script>
+<link rel="stylesheet" href="/static/amplifier-theme.css">
 <style>
 /* ------------------------------------------------------------------ */
-/*  Design Tokens (shared with quickstart.html)                        */
+/*  Page-specific tokens                                               */
 /* ------------------------------------------------------------------ */
 :root {
-  --bg-primary: #111827;
-  --bg-secondary: #1f2937;
-  --bg-card: #374151;
-  --text-primary: #f9fafb;
-  --text-secondary: #9ca3af;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --error: #ef4444;
-  --border: #4b5563;
-  --radius: 8px;
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --slack-purple: #611f69;
 }
 
@@ -34,9 +22,9 @@
 
 html, body {
   height: 100%;
-  font-family: var(--font);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: var(--font-body);
+  background: var(--canvas);
+  color: var(--ink);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -53,27 +41,17 @@ body {
 /*  Card                                                               */
 /* ------------------------------------------------------------------ */
 .card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--canvas-warm);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-card);
   padding: 48px 40px;
   width: 100%;
   max-width: 520px;
-}
-
-.logo {
-  font-size: 28px;
-  font-weight: 800;
-  margin-bottom: 4px;
-  text-align: center;
-  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  box-shadow: var(--shadow-lift);
 }
 
 .tagline {
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   font-size: 15px;
   margin-bottom: 32px;
   text-align: center;
@@ -85,7 +63,7 @@ body {
 .step {
   margin-bottom: 28px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--canvas-mist);
 }
 
 .step:last-of-type { border-bottom: none; }
@@ -104,15 +82,15 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--canvas-stone);
+  border: 1px solid var(--canvas-mist);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
 .step-title {
@@ -126,7 +104,7 @@ body {
 
 .step-hint {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-bottom: 10px;
 }
 
@@ -142,7 +120,7 @@ body {
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -151,24 +129,24 @@ body {
 .field input, .field select {
   width: 100%;
   padding: 10px 14px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: var(--mono);
+  background: var(--canvas-stone);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
+  font-family: var(--font-mono);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 
 .field input:focus, .field select:focus {
-  border-color: var(--accent);
+  border-color: var(--signal);
 }
 
-.field input::placeholder { color: #6b7280; }
+.field input::placeholder { color: var(--ink-fog); }
 
 .field select {
-  font-family: var(--font);
+  font-family: var(--font-body);
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
@@ -178,32 +156,32 @@ body {
 }
 
 .field select option {
-  background: var(--bg-card);
-  color: var(--text-primary);
+  background: var(--canvas-stone);
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Manifest Box                                                       */
 /* ------------------------------------------------------------------ */
 .manifest-box {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--canvas);
+  border: 1px solid var(--canvas-mist);
+  border-radius: var(--radius-input);
   padding: 14px;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
   max-height: 200px;
   overflow-y: auto;
   white-space: pre;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
   margin-bottom: 12px;
   position: relative;
 }
 
 .manifest-box::-webkit-scrollbar { width: 6px; }
 .manifest-box::-webkit-scrollbar-track { background: transparent; }
-.manifest-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.manifest-box::-webkit-scrollbar-thumb { background: var(--canvas-mist); border-radius: 3px; }
 
 /* ------------------------------------------------------------------ */
 /*  Buttons                                                            */
@@ -215,33 +193,33 @@ body {
   gap: 8px;
   padding: 10px 20px;
   border: none;
-  border-radius: var(--radius);
-  font-family: var(--font);
+  border-radius: var(--radius-button);
+  font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) var(--ease-out);
   text-decoration: none;
 }
 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--signal);
   color: #fff;
   width: 100%;
   padding: 12px 24px;
 }
 
-.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-primary:hover:not(:disabled) { background: var(--signal-light); }
 
 .btn-secondary {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--canvas-stone);
+  color: var(--ink);
+  border: 1px solid var(--canvas-mist);
 }
 
-.btn-secondary:hover:not(:disabled) { background: var(--border); }
+.btn-secondary:hover:not(:disabled) { background: var(--canvas-mist); }
 
 .btn-slack {
   background: var(--slack-purple);
@@ -296,7 +274,7 @@ body {
 .validation.fail { color: var(--error); }
 .validation.pending .dot { background: var(--warning); animation: pulse 1s ease infinite; }
 .validation.pending { color: var(--warning); }
-.validation.none { color: var(--text-secondary); }
+.validation.none { color: var(--ink-slate); }
 
 @keyframes pulse { 50% { opacity: 0.4; } }
 
@@ -306,18 +284,18 @@ body {
 .error-msg {
   margin-top: 10px;
   padding: 10px 14px;
-  background: rgba(239,68,68,0.1);
+  background: var(--error-soft);
   color: var(--error);
-  border-radius: var(--radius);
+  border-radius: var(--radius-subtle);
   font-size: 13px;
 }
 
 .success-msg {
   margin-top: 10px;
   padding: 10px 14px;
-  background: rgba(34,197,94,0.1);
+  background: var(--success-soft);
   color: var(--success);
-  border-radius: var(--radius);
+  border-radius: var(--radius-subtle);
   font-size: 13px;
 }
 
@@ -328,11 +306,11 @@ body {
   margin-top: 24px;
   text-align: center;
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--ink-slate);
 }
 
 .footer a {
-  color: var(--accent);
+  color: var(--signal);
   text-decoration: none;
 }
 
@@ -341,7 +319,8 @@ body {
 </head>
 <body>
 <div class="card">
-  <div class="logo">Connect Slack</div>
+  <h1 class="wordmark wordmark-sm">amplifier</h1>
+  <p style="color: var(--ink-slate); font-size: 1.1rem; margin-top: 8px; text-align: center;">Connect Slack</p>
   <p class="tagline">Bridge your Slack workspace to Amplifier</p>
 
   <!-- ============================================================ -->
@@ -378,8 +357,8 @@ body {
     <div class="step-body">
       <p class="step-hint">
         After installing the app: copy the <strong>Bot Token</strong> from
-        OAuth & Permissions, and the <strong>App Token</strong> from
-        Basic Information > App-Level Tokens
+        OAuth &amp; Permissions, and the <strong>App Token</strong> from
+        Basic Information &gt; App-Level Tokens
         (create one with <code>connections:write</code> scope).
       </p>
       <div class="field">
@@ -426,7 +405,7 @@ body {
   <div class="step disabled" id="step4">
     <div class="step-header">
       <span class="step-num">4</span>
-      <span class="step-title">Save & Connect</span>
+      <span class="step-title">Save &amp; Connect</span>
     </div>
     <div class="step-body">
       <p class="step-hint">
@@ -434,7 +413,7 @@ body {
         <code>distro.yaml</code>. Then sends a test message to verify
         everything works.
       </p>
-      <button class="btn btn-primary" id="saveBtn">Save & Test Connection</button>
+      <button class="btn btn-primary" id="saveBtn">Save &amp; Test Connection</button>
       <div id="saveFeedback"></div>
     </div>
   </div>
@@ -721,12 +700,12 @@ saveBtn.addEventListener('click', async () => {
         '<div class="error-msg">Test message failed: ' + esc(testData.hint || testData.error) +
         '<br><small>Config is saved - the bridge will work once the issue is resolved. ' +
         'Most common fix: <code>/invite @amplifier</code> in the channel.</small></div>';
-      saveBtn.innerHTML = 'Save & Test Connection';
+      saveBtn.innerHTML = 'Save &amp; Test Connection';
       saveBtn.disabled = false;
     }
   } catch (err) {
     saveFeedback.innerHTML = '<div class="error-msg">' + esc(err.message) + '</div>';
-    saveBtn.innerHTML = 'Save & Test Connection';
+    saveBtn.innerHTML = 'Save &amp; Test Connection';
     saveBtn.disabled = false;
   }
 });
