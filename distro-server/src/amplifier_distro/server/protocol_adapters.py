@@ -84,16 +84,21 @@ class ApprovalSystem:
 
 
 class QueueDisplaySystem:
-    """Display system that pushes messages to an asyncio.Queue.
+    """Display system that pushes messages to an asyncio.Queue or _QueueHolder.
 
     Satisfies the display protocol expected by the coordinator.
     Every show_message() call enqueues a ("display_message", {...}) tuple.
+
+    Accepts any object with a compatible ``put_nowait(item)`` method, which
+    includes both ``asyncio.Queue`` and the ``_QueueHolder`` fanout wrapper
+    used by ``FoundationBackend``.  Passing a ``_QueueHolder`` means display
+    messages are broadcast to all currently-connected clients automatically.
     """
 
     def __init__(
         self,
-        queue: asyncio.Queue,
-        nesting_depth: int = 0,  # type: ignore[type-arg]
+        queue: Any,  # asyncio.Queue or _QueueHolder (duck-typed via put_nowait)
+        nesting_depth: int = 0,
     ) -> None:
         self._queue = queue
         self._nesting_depth = nesting_depth
