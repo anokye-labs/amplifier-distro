@@ -18,8 +18,6 @@
 <body>
 
 <div class="container">
-  <div id="app-header"></div>
-
   <!-- Wordmark -->
   <div class="wordmark-wrapper">
     <h1 class="wordmark">amplifier</h1>
@@ -64,16 +62,17 @@
     <a href="/apps/install-wizard/">Setup wizard</a> &middot;
     <a href="/api/apps">API</a> &middot;
     <a href="/api/docs">Swagger UI</a> &middot;
-    <a href="/api/openapi.json">OpenAPI spec</a>
+    <a href="/api/openapi.json">OpenAPI spec</a> &middot;
+    <span id="feedback-slot"></span>
   </div>
 </div>
 
 <script src="/static/feedback-widget.js"></script>
-<script src="/static/amplifier-header.js"></script>
 <script>
-  AmplifierHeader.init({
-    container: document.getElementById('app-header'),
-    feedbackApp: 'dashboard',
+  AmplifierFeedback.init({
+    mode: 'inline',
+    container: document.getElementById('feedback-slot'),
+    context: { app: 'dashboard' },
   });
 </script>
 </body>

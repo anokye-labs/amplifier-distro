@@ -8,7 +8,6 @@
 <script src="/apps/voice/static/connection-health.mjs"></script>
 <script src="/static/theme-init.js"></script>
 <script src="/static/feedback-widget.js"></script>
-<script src="/static/amplifier-header.js"></script>
 
 <link rel="stylesheet" href="/static/amplifier-theme.css">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -37,15 +36,21 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Status bar (replaces old .app-header; wordmark moved to shared    */
-/*  AmplifierHeader above the #app mount point)                       */
+/*  Header                                                             */
 /* ------------------------------------------------------------------ */
-.app-status-bar {
+.app-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 0;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--canvas-mist);
+}
+
+.app-title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  color: var(--signal);
+  letter-spacing: 0.05em;
 }
 
 /* ------------------------------------------------------------------ */
@@ -693,15 +698,6 @@ body {
 </style>
 </head>
 <body>
-<div id="app-header" style="width:100%;max-width:900px;margin:0 auto;"></div>
-<script>
-AmplifierHeader.init({
-  appName: 'voice',
-  backLink: { url: '/', label: 'Dashboard' },
-  feedbackApp: 'voice',
-  container: document.getElementById('app-header'),
-});
-</script>
 <div id="app"></div>
 
 <script>
@@ -1868,6 +1864,7 @@ AmplifierHeader.init({
     const [isConnecting, setIsConnecting] = useState(false);
     const [sessionId, setSessionId] = useState(null);  // Task 5.3: session state
     const transcriptEndRef = useRef(null);
+    const feedbackSlotRef = useRef(null);
 
     // Task 5.5: connection health manager (stable across renders)
     const healthManagerRef = useRef(null);
@@ -1990,7 +1987,19 @@ AmplifierHeader.init({
     // Wire latest handler into stable ref on every render (ref mutation, no rerender)
     msgHandlerRef.current = handleDataChannelEvent;
 
-    // Feedback widget is now handled by AmplifierHeader above the #app mount point.
+    // Mount shared feedback widget into header slot (once)
+    useEffect(() => {
+      const slot = feedbackSlotRef.current;
+      if (!slot || slot.childElementCount > 0) return;
+      if (window.AmplifierFeedback) {
+        window.AmplifierFeedback.init({
+          mode: 'inline',
+          container: slot,
+          label: 'Feedback',
+          context: { app: 'voice' },
+        });
+      }
+    }, []);
 
     // delegation-feedback: SSE consumer with delegation lifecycle
     const { delegationState } = useAmplifierEvents({
@@ -2183,11 +2192,15 @@ AmplifierHeader.init({
 
     return html`
       <div id="app">
-        <div class="app-status-bar">
-          ${muted && html`<span class="muted-badge">🎙 Muted</span>`}
-          <div class=${'status-badge ' + rtcState}>
-            <div class="status-dot"></div>
-            ${statusLabel}
+        <div class="app-header">
+          <h1 class="wordmark wordmark-sm">amplifier voice</h1>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${muted && html`<span class="muted-badge">🎙 Muted</span>`}
+            <div class=${'status-badge ' + rtcState}>
+              <div class="status-dot"></div>
+              ${statusLabel}
+            </div>
+            <span ref=${feedbackSlotRef} style="font-size:13px;"></span>
           </div>
         </div>
 
