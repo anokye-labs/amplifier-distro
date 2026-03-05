@@ -62,8 +62,6 @@ SLACK_APP_MANIFEST = {
                 "reactions:write",
                 "channels:manage",
                 "channels:join",
-                "files:read",
-                "files:write",
             ],
         },
     },

@@ -61,11 +61,8 @@ The onboarding experience guides setup. Capabilities can be enabled or changed a
 ```bash
 git clone https://github.com/microsoft/amplifier-distro && cd amplifier-distro
 cd distro-server
-uv tool install -e . --force --upgrade
+uv tool install -e .
 ```
-
-> **Note:** If you change a dependency, you may need `--reinstall` instead:
-> `uv tool install -e . --reinstall`
 
 ## Commands
 

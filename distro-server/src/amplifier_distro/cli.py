@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import click
-import click.core
 
 from . import conventions
 
@@ -27,35 +26,115 @@ class _EpilogGroup(click.Group):
 EPILOG = """\
 Quick-start examples:
 
-  amp-distro serve           Start the experience server (foreground)
-  amp-distro serve --dev     Dev mode (mock sessions, no LLM needed)
+  amp-distro                 Start the experience server (foreground)
+  amp-distro --dev           Dev mode (mock sessions, no LLM needed)
+  amp-distro serve --dev     Same as above (explicit subcommand)
   amp-distro backup          Back up Amplifier state to GitHub
   amp-distro restore         Restore from backup
   amp-distro service install Register as auto-start service"""
 
 
+def _serve_options(func):
+    """Shared CLI options for starting the experience server."""
+    options = [
+        click.option(
+            "--host",
+            default="0.0.0.0",
+            help="Bind host (use 127.0.0.1 to restrict to localhost)",
+        ),
+        click.option(
+            "--port",
+            default=conventions.SERVER_DEFAULT_PORT,
+            type=int,
+            help="Bind port",
+        ),
+        click.option(
+            "--apps-dir",
+            default=None,
+            type=click.Path(exists=True),
+            help="Apps directory",
+        ),
+        click.option(
+            "--reload",
+            is_flag=True,
+            help="Enable auto-reload for development",
+        ),
+        click.option(
+            "--dev",
+            is_flag=True,
+            help="Dev mode: mock session backend (no LLM)",
+        ),
+        click.option(
+            "--stub",
+            is_flag=True,
+            help="Stub mode: canned data for fast iteration (implies --dev)",
+        ),
+        click.option(
+            "--tls",
+            "tls_mode",
+            type=click.Choice(["auto", "off", "manual"], case_sensitive=False),
+            default="off",
+            help="TLS: auto (self-signed), off (plain HTTP), manual (provide certs)",
+        ),
+        click.option(
+            "--ssl-certfile",
+            default="",
+            help="Path to SSL certificate file (implies --tls manual)",
+        ),
+        click.option(
+            "--ssl-keyfile",
+            default="",
+            help="Path to SSL private key file (used with --ssl-certfile)",
+        ),
+        click.option(
+            "--no-auth",
+            is_flag=True,
+            help="Disable authentication",
+        ),
+    ]
+    for option in reversed(options):
+        func = option(func)
+    return func
+
+
 @click.group(
     cls=_EpilogGroup,
     epilog=EPILOG,
-    help="Amplifier Experience Server management tool.\n\n"
-    "Manages the experience server, backups, and platform service.",
     invoke_without_command=True,
+    help="Amplifier Experience Server management tool.\n\n"
+    "Manages the experience server, backups, and platform service.\n\n"
+    "Run without a subcommand to start the server (same as 'amp-distro serve').",
 )
 @click.version_option(package_name="amplifier-distro")
+@_serve_options
 @click.pass_context
-def main(ctx: click.Context) -> None:
+def main(
+    ctx: click.Context,
+    host: str,
+    port: int,
+    apps_dir: str | None,
+    reload: bool,
+    dev: bool,
+    stub: bool,
+    tls_mode: str,
+    ssl_certfile: str,
+    ssl_keyfile: str,
+    no_auth: bool,
+) -> None:
     """Amplifier Experience Server management tool."""
     if ctx.invoked_subcommand is None:
-        from . import conventions
-        from .server.cli import _run_foreground
-
-        click.echo("Tip: Use 'amp-distro serve' to enable access from other devices")
-        _run_foreground(
-            "127.0.0.1",
-            conventions.SERVER_DEFAULT_PORT,
-            None,
-            False,
-            False,
+        ctx.invoke(
+            serve_cmd,
+            host=host,
+            port=port,
+            apps_dir=apps_dir,
+            reload=reload,
+            dev=dev,
+            stub=stub,
+            tls_mode=tls_mode,
+            ssl_certfile=ssl_certfile,
+            ssl_keyfile=ssl_keyfile,
+            no_auth=no_auth,
         )
 
 
@@ -63,46 +142,7 @@ def main(ctx: click.Context) -> None:
 
 
 @main.command("serve")
-@click.option(
-    "--host",
-    default="0.0.0.0",
-    help="Bind host (use 127.0.0.1 to restrict to localhost)",
-)
-@click.option(
-    "--port", default=conventions.SERVER_DEFAULT_PORT, type=int, help="Bind port"
-)
-@click.option(
-    "--apps-dir", default=None, type=click.Path(exists=True), help="Apps directory"
-)
-@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
-@click.option("--dev", is_flag=True, help="Dev mode: mock session backend (no LLM)")
-@click.option(
-    "--stub",
-    is_flag=True,
-    help="Stub mode: serve UI with canned data for fast iteration (implies --dev)",
-)
-@click.option(
-    "--tls",
-    "tls_mode",
-    type=click.Choice(["auto", "off", "manual"], case_sensitive=False),
-    default="off",
-    help="TLS mode: auto (self-signed), off (plain HTTP), manual (provide certs)",
-)
-@click.option(
-    "--ssl-certfile",
-    default="",
-    help="Path to SSL certificate file (implies --tls manual)",
-)
-@click.option(
-    "--ssl-keyfile",
-    default="",
-    help="Path to SSL private key file (used with --ssl-certfile)",
-)
-@click.option(
-    "--no-auth",
-    is_flag=True,
-    help="Disable authentication",
-)
+@_serve_options
 def serve_cmd(
     host: str,
     port: int,
@@ -123,12 +163,6 @@ def serve_cmd(
     # --ssl-certfile implies manual TLS mode when tls_mode is still default
     if tls_mode == "off" and ssl_certfile:
         tls_mode = "manual"
-    # Detect whether --tls was explicitly provided by the user (vs defaulted to "off").
-    # When explicit, honour the value as-is (including --tls off as escape hatch).
-    tls_explicit = (
-        click.get_current_context().get_parameter_source("tls_mode")
-        == click.core.ParameterSource.COMMANDLINE
-    )
     _run_foreground(
         host,
         port,
@@ -137,7 +171,6 @@ def serve_cmd(
         dev,
         stub=stub,
         tls_mode=tls_mode,
-        tls_explicit=tls_explicit,
         ssl_certfile=ssl_certfile,
         ssl_keyfile=ssl_keyfile,
         no_auth=no_auth,
