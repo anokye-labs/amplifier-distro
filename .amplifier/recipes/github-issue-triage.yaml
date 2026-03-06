@@ -29,7 +29,7 @@
 #   - focus (optional):      Label filter — "bugs", "enhancements", or "all" (default: "bugs")
 #   - max_issues (optional): Max issues to fetch; empty string = up to 200 (default: "")
 #   - batch_size (optional): Issues per investigation batch (default: "5")
-#   - report_path (optional): Output file path (default: <repo_path>/triage-report-<timestamp>.md)
+#   - report_path (optional): Output file path (default: <repo_path>/triage-reports/triage-report-<timestamp>.md)
 #
 # Stages:
 #   1. discovery       — Fetch issues (with comments)/PRs, detect existing findings,
@@ -106,7 +106,7 @@ context:
   focus: "bugs"           # Optional: "bugs", "enhancements", or "all"
   max_issues: ""          # Optional: max issues to fetch ("" = up to 200)
   batch_size: "5"         # Optional: issues per investigation batch (5-10 recommended)
-  report_path: ""         # Optional: output path (default: <repo_path>/triage-report-<ts>.md)
+  report_path: ""         # Optional: output path (default: <repo_path>/triage-reports/triage-report-<ts>.md)
   _approval_message: "new"  # Runtime: set by approval gate (default: skip previously investigated)
 
 rate_limiting:
@@ -318,7 +318,7 @@ stages:
           skipped_findings=$(jq -nc \
             --argjson has "$has_finding" \
             --argjson sel "$selected" \
-            '[$has[] | select(.issue_number as $n |
+            '[$has[] | select(.issue_number as $n |\
               [$sel[].issue_number] | index($n) | not)]')
 
           # Split selected issues into batches
@@ -784,7 +784,7 @@ stages:
           # Determine output path
           report_path="{{report_path}}"
           if [ -z "$report_path" ]; then
-            report_path="{{repo_path}}/triage-report-$(date +%Y%m%d-%H%M%S).md"
+            report_path="{{repo_path}}/triage-reports/triage-report-$(date +%Y%m%d-%H%M%S).md"
           fi
 
           # Ensure directory exists
