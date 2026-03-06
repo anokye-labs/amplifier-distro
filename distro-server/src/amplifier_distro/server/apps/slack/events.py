@@ -438,6 +438,7 @@ class SlackEventHandler:
                 channel=message.channel_id,
                 thread_ts=reply_thread,
                 working_dir=mapping.working_dir,
+                user_id=message.user_id,
             )
             if response is not None:
                 streamed = True

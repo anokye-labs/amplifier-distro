@@ -89,6 +89,7 @@ class SlackStreamer:
         channel: str,
         thread_ts: str,
         working_dir: str = "",
+        user_id: str = "",
     ) -> str | None:
         """Execute a prompt with real-time token streaming to Slack.
 
@@ -111,7 +112,7 @@ class SlackStreamer:
             return None  # Caller should fall back to send_message
 
         # Try to use Slack's native streaming API
-        stream_id = await self._try_start_stream(channel, thread_ts)
+        stream_id = await self._try_start_stream(channel, thread_ts, user_id=user_id)
         use_native_streaming = stream_id is not None
 
         if not use_native_streaming:
@@ -284,25 +285,22 @@ class SlackStreamer:
         return self._bot_user_id
 
     async def _try_start_stream(
-        self, channel: str, thread_ts: str
+        self, channel: str, thread_ts: str, user_id: str = ""
     ) -> str | None:
         """Start a Slack text stream. Returns stream_id or None on failure."""
-        # Resolve team_id (required by Slack) and bot_user_id (for recipient)
         team_id = await self._resolve_team_id()
         if not team_id:
             logger.info("Could not resolve team_id, skipping streaming")
             return None
-
-        # For channel threads, pass the bot as recipient
-        bot_user_id = await self._resolve_bot_user_id()
 
         kwargs: dict[str, Any] = {
             "channel": channel,
             "thread_ts": thread_ts,
             "recipient_team_id": team_id,
         }
-        if bot_user_id:
-            kwargs["recipient_user_id"] = bot_user_id
+        # recipient_user_id is required — use the message sender
+        if user_id:
+            kwargs["recipient_user_id"] = user_id
         data = await self._slack_api("chat.startStream", **kwargs)
         if data and data.get("ok"):
             stream_id = data.get("stream_id", "")
