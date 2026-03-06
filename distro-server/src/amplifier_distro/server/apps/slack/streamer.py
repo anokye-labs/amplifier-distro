@@ -79,6 +79,7 @@ class SlackStreamer:
         self._client = client
         self._config = config
         self._backend = backend
+        self._team_id: str | None = None
 
     async def execute_streaming(
         self,
@@ -262,13 +263,26 @@ class SlackStreamer:
             logger.debug("Slack API call %s failed", method, exc_info=True)
             return None
 
+    async def _resolve_team_id(self) -> str | None:
+        """Get and cache the workspace team ID via auth.test."""
+        if self._team_id is not None:
+            return self._team_id
+        data = await self._slack_api("auth.test")
+        if data and data.get("ok"):
+            self._team_id = data.get("team_id", "")
+            logger.debug("Resolved team_id: %s", self._team_id)
+            return self._team_id
+        return None
+
     async def _try_start_stream(
         self, channel: str, thread_ts: str
     ) -> str | None:
         """Start a Slack text stream. Returns stream_id or None on failure."""
-        data = await self._slack_api(
-            "chat.startStream", channel=channel, thread_ts=thread_ts
-        )
+        team_id = await self._resolve_team_id()
+        kwargs: dict[str, Any] = {"channel": channel, "thread_ts": thread_ts}
+        if team_id:
+            kwargs["recipient_team_id"] = team_id
+        data = await self._slack_api("chat.startStream", **kwargs)
         if data and data.get("ok"):
             stream_id = data.get("stream_id", "")
             logger.info("Slack stream started: %s", stream_id)

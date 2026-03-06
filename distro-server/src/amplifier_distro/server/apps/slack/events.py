@@ -425,6 +425,7 @@ class SlackEventHandler:
 
         reply_thread = message.thread_ts or message.ts
         response: str | None = None
+        streamed = False
 
         # Try streaming path first
         mapping = self._sessions.get_mapping(message.channel_id, message.thread_ts)
@@ -438,24 +439,15 @@ class SlackEventHandler:
                 thread_ts=reply_thread,
                 working_dir=mapping.working_dir,
             )
+            if response is not None:
+                streamed = True
 
         # Fall back to batch mode if streaming returned None
         if response is None:
             response = await self._sessions.route_message(message)
 
-        # Post response (streaming already posted inline; batch needs posting)
-        # If streamer was used and returned text, it was already streamed to Slack.
-        # We only need to post if we fell back to batch mode.
-        if response and streamer is None:
-            chunks = SlackFormatter.format_response(response)
-            for chunk in chunks:
-                await self._client.post_message(
-                    message.channel_id,
-                    text=chunk,
-                    thread_ts=reply_thread,
-                )
-        elif response and not mapping:
-            # No mapping found, batch post the response
+        # Post response — only needed for batch mode (streaming already posted)
+        if response and not streamed:
             chunks = SlackFormatter.format_response(response)
             for chunk in chunks:
                 await self._client.post_message(
