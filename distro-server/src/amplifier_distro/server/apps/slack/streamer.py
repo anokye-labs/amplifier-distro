@@ -246,75 +246,52 @@ class SlackStreamer:
 
     # --- Slack Streaming API wrappers (best-effort, never fatal) ---
 
+    async def _slack_api(self, method: str, **kwargs: Any) -> dict[str, Any] | None:
+        """Make a Slack API call with proper timeout. Returns response dict or None."""
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"https://slack.com/api/{method}",
+                    headers={"Authorization": f"Bearer {self._config.bot_token}"},
+                    json=kwargs,
+                )
+                return resp.json()
+        except Exception:
+            logger.debug("Slack API call %s failed", method, exc_info=True)
+            return None
+
     async def _try_start_stream(
         self, channel: str, thread_ts: str
     ) -> str | None:
         """Start a Slack text stream. Returns stream_id or None on failure."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "https://slack.com/api/chat.startStream",
-                    headers={"Authorization": f"Bearer {self._config.bot_token}"},
-                    json={"channel": channel, "thread_ts": thread_ts},
-                )
-                data = resp.json()
-                if data.get("ok"):
-                    stream_id = data.get("stream_id", "")
-                    logger.info("Slack stream started: %s", stream_id)
-                    return stream_id
-                else:
-                    error = data.get("error", "unknown")
-                    logger.info(
-                        "Slack streaming not available (%s), using fallback", error
-                    )
-                    return None
-        except Exception:
-            logger.debug("Failed to start Slack stream, using fallback", exc_info=True)
-            return None
+        data = await self._slack_api(
+            "chat.startStream", channel=channel, thread_ts=thread_ts
+        )
+        if data and data.get("ok"):
+            stream_id = data.get("stream_id", "")
+            logger.info("Slack stream started: %s", stream_id)
+            return stream_id
+        error = data.get("error", "unknown") if data else "no response"
+        logger.info("Slack streaming not available (%s), using fallback", error)
+        return None
 
     async def _try_append_stream(self, stream_id: str, text: str) -> None:
         """Append text to a Slack stream. Best-effort."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    "https://slack.com/api/chat.appendStream",
-                    headers={"Authorization": f"Bearer {self._config.bot_token}"},
-                    json={"stream_id": stream_id, "text": text},
-                )
-        except Exception:
-            logger.debug("Failed to append to stream", exc_info=True)
+        await self._slack_api("chat.appendStream", stream_id=stream_id, text=text)
 
     async def _try_stop_stream(self, stream_id: str) -> None:
         """Stop a Slack stream. Best-effort."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    "https://slack.com/api/chat.stopStream",
-                    headers={"Authorization": f"Bearer {self._config.bot_token}"},
-                    json={"stream_id": stream_id},
-                )
-                logger.info("Slack stream stopped: %s", stream_id)
-        except Exception:
-            logger.debug("Failed to stop stream", exc_info=True)
+        result = await self._slack_api("chat.stopStream", stream_id=stream_id)
+        if result:
+            logger.info("Slack stream stopped: %s", stream_id)
 
     async def _try_set_status(
         self, channel: str, thread_ts: str, status: str
     ) -> None:
         """Set assistant thread status (typing indicator). Best-effort."""
-        try:
-            import httpx
-
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    "https://slack.com/api/assistant.threads.setStatus",
-                    headers={"Authorization": f"Bearer {self._config.bot_token}"},
-                    json={"channel_id": channel, "thread_ts": thread_ts, "status": status},
-                )
-        except Exception:
-            logger.debug("Failed to set thread status", exc_info=True)
+        await self._slack_api(
+            "assistant.threads.setStatus",
+            channel_id=channel, thread_ts=thread_ts, status=status,
+        )
