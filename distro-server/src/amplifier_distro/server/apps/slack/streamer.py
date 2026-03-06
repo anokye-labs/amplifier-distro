@@ -80,6 +80,7 @@ class SlackStreamer:
         self._config = config
         self._backend = backend
         self._team_id: str | None = None
+        self._bot_user_id: str | None = None
 
     async def execute_streaming(
         self,
@@ -270,18 +271,38 @@ class SlackStreamer:
         data = await self._slack_api("auth.test")
         if data and data.get("ok"):
             self._team_id = data.get("team_id", "")
-            logger.debug("Resolved team_id: %s", self._team_id)
+            self._bot_user_id = data.get("user_id", "")
+            logger.debug("Resolved team_id: %s, bot_user_id: %s", self._team_id, self._bot_user_id)
             return self._team_id
         return None
+
+    async def _resolve_bot_user_id(self) -> str | None:
+        """Get and cache the bot's user ID."""
+        if self._bot_user_id is not None:
+            return self._bot_user_id
+        await self._resolve_team_id()
+        return self._bot_user_id
 
     async def _try_start_stream(
         self, channel: str, thread_ts: str
     ) -> str | None:
         """Start a Slack text stream. Returns stream_id or None on failure."""
+        # Resolve team_id (required by Slack) and bot_user_id (for recipient)
         team_id = await self._resolve_team_id()
-        kwargs: dict[str, Any] = {"channel": channel, "thread_ts": thread_ts}
-        if team_id:
-            kwargs["recipient_team_id"] = team_id
+        if not team_id:
+            logger.info("Could not resolve team_id, skipping streaming")
+            return None
+
+        # For channel threads, pass the bot as recipient
+        bot_user_id = await self._resolve_bot_user_id()
+
+        kwargs: dict[str, Any] = {
+            "channel": channel,
+            "thread_ts": thread_ts,
+            "recipient_team_id": team_id,
+        }
+        if bot_user_id:
+            kwargs["recipient_user_id"] = bot_user_id
         data = await self._slack_api("chat.startStream", **kwargs)
         if data and data.get("ok"):
             stream_id = data.get("stream_id", "")
