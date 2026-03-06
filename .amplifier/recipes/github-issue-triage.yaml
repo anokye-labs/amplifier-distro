@@ -1,12 +1,17 @@
 # =============================================================================
-# GitHub Issue Triage Recipe
+# GitHub Issue Triage Recipe (Incremental)
 # =============================================================================
 #
 # Automated workflow for triaging GitHub issues against merged PRs.
-# Fetches open issues and merged PRs, cross-references them, investigates
-# the current code state per issue, verifies PR fixes by reading actual
-# diffs, cross-validates all findings with a second LLM provider, and
-# compiles everything into a structured triage report.
+# Supports incremental operation — detects existing triage findings posted
+# to issues and skips re-investigation unless explicitly requested.
+#
+# Fetches open issues (with comments) and merged PRs, cross-references them,
+# detects prior triage findings via hidden HTML markers, investigates the
+# current code state per issue, verifies PR fixes by reading actual diffs,
+# cross-validates all findings with a second LLM provider, posts findings
+# as comments to GitHub issues, and compiles everything into a structured
+# triage report.
 #
 # Requirements:
 #   - GitHub CLI (gh) installed and authenticated with repo access
@@ -27,13 +32,24 @@
 #   - report_path (optional): Output file path (default: <repo_path>/triage-report-<timestamp>.md)
 #
 # Stages:
-#   1. discovery     — Fetch issues/PRs, cross-reference, produce initial triage
-#                      [APPROVAL GATE: user selects which issues to investigate]
-#   2. investigation — Deep code investigation, PR diff verification, cross-review
-#                      [APPROVAL GATE: user reviews findings before report generation]
-#   3. report        — Synthesize findings and write triage report to file
+#   1. discovery       — Fetch issues (with comments)/PRs, detect existing findings,
+#                         cross-reference, produce initial triage
+#                         [APPROVAL GATE: user selects which issues to investigate;
+#                          default "new" skips previously investigated issues]
+#   2. investigation   — Deep code investigation, PR diff verification, cross-review
+#                         [APPROVAL GATE: user reviews findings before proceeding]
+#   3. post-findings   — Format triage findings as GitHub issue comments
+#                         [APPROVAL GATE: user reviews comments before posting]
+#   4. report          — Post finding comments to GitHub, synthesize findings,
+#                         write triage report to file
 #
-# Typical runtime: 15-45 minutes depending on issue count
+# Incremental behavior:
+#   Issues with an existing <!-- amplifier-triage-finding --> comment are detected
+#   during discovery. By default ("new"), they are skipped during investigation.
+#   Users can override with "all" to re-investigate, or specify issue numbers.
+#   Finding comments are only posted for issues that don't already have one.
+#
+# Typical runtime: 15-50 minutes depending on issue count
 #
 # Provider strategy:
 #   - Investigation steps prefer Anthropic (Provider A)
@@ -43,6 +59,30 @@
 # =============================================================================
 # CHANGELOG
 # =============================================================================
+#
+# v1.1.0 (2026-03-05):
+#   - NEW FEATURE: Incremental triage with existing finding detection
+#     * fetch-open-issues now fetches issue comments alongside metadata
+#     * cross-reference step detects <!-- amplifier-triage-finding --> markers
+#       in comments and categorizes issues with HAS_FINDING status
+#     * Default approval behavior changed from "all" to "new" — previously
+#       investigated issues are skipped by default
+#   - NEW FEATURE: Post-findings stage with approval gate (new stage 3)
+#     * Formats triage findings as GitHub-compatible markdown comments
+#     * Each comment starts with hidden <!-- amplifier-triage-finding --> marker
+#       for future incremental detection
+#     * Posts findings via `gh issue comment` with --body-file for safe handling
+#     * Approval gate allows review of all comments before posting
+#     * Issues with existing findings are automatically excluded from posting
+#   - IMPROVEMENT: Investigation stage respects existing findings
+#     * "new" (default): only investigate issues without existing findings
+#     * "all": re-investigate everything including previously investigated
+#     * "unsolved": NO_LINKED_PR issues without existing findings
+#     * Comma-separated issue numbers: always investigated regardless of status
+#     * Investigation plan now tracks skipped issues for the report
+#   - IMPROVEMENT: Report includes "Previously Investigated" section
+#     * Shows issues skipped due to existing findings with their existing verdict
+#     * Provides context on prior investigations without re-running them
 #
 # v1.0.0 (2026-03-05):
 #   - Initial recipe implementation
@@ -56,9 +96,9 @@
 # =============================================================================
 
 name: "github-issue-triage"
-description: "Automated GitHub issue triage: cross-references open issues against merged PRs, investigates current code state in batches, verifies PR fixes via diffs, cross-validates findings across providers, and generates a structured report"
-version: "1.0.0"
-tags: ["github", "triage", "issues", "cross-validation", "report"]
+description: "Incremental GitHub issue triage: detects existing findings to avoid re-investigation, cross-references open issues against merged PRs, investigates code state in batches, verifies PR fixes via diffs, cross-validates across providers, posts findings as issue comments, and generates a structured report"
+version: "1.1.0"
+tags: ["github", "triage", "issues", "cross-validation", "report", "incremental"]
 
 context:
   repo_path: "."          # Local path to the cloned git repo (default: current directory)
@@ -67,7 +107,7 @@ context:
   max_issues: ""          # Optional: max issues to fetch ("" = up to 200)
   batch_size: "5"         # Optional: issues per investigation batch (5-10 recommended)
   report_path: ""         # Optional: output path (default: <repo_path>/triage-report-<ts>.md)
-  _approval_message: "all"  # Runtime: set by approval gate (default: investigate all issues)
+  _approval_message: "new"  # Runtime: set by approval gate (default: skip previously investigated)
 
 rate_limiting:
   max_concurrent_llm: 3
@@ -81,11 +121,12 @@ rate_limiting:
 stages:
   # ===========================================================================
   # STAGE 1: DISCOVERY
-  # Fetch issues and PRs from GitHub, cross-reference, produce initial triage.
+  # Fetch issues (with comments) and PRs from GitHub, detect existing findings,
+  # cross-reference, produce initial triage.
   # ===========================================================================
   - name: "discovery"
     steps:
-      # --- Fetch all open issues from GitHub ---
+      # --- Fetch all open issues from GitHub (including comments for finding detection) ---
       - id: "fetch-open-issues"
         type: "bash"
         command: |
@@ -111,7 +152,7 @@ stages:
           fi
 
           gh issue list --repo "{{repo_name}}" --state open \
-            --json number,title,body,labels \
+            --json number,title,body,labels,comments \
             $label_filter $limit_flag
         output: "open_issues"
         parse_json: true
@@ -131,7 +172,7 @@ stages:
         parse_json: true
         timeout: 120
 
-      # --- Cross-reference issues against merged PRs ---
+      # --- Cross-reference issues against merged PRs + detect existing findings ---
       - id: "cross-reference"
         agent: "foundation:zen-architect"
         mode: "ANALYZE"
@@ -151,7 +192,22 @@ stages:
 
           ## Task
 
-          Cross-reference every open issue against the merged PRs:
+          Cross-reference every open issue against the merged PRs AND check for
+          existing triage findings in the issue comments.
+
+          ### Step 1: Detect Existing Triage Findings
+
+          For each issue, examine its `comments` array. Look for any comment whose
+          `body` starts with `<!-- amplifier-triage-finding -->` on the **first line**.
+
+          - If found: set `has_existing_finding` to `true`, extract the verdict
+            (SOLVED / PARTIALLY_SOLVED / UNSOLVED) from the comment body, and include
+            the full comment body as `existing_finding_text`.
+          - If the `comments` array is empty or no comment has the marker:
+            set `has_existing_finding` to `false`, and set `existing_finding_verdict`
+            and `existing_finding_text` to `null`.
+
+          ### Step 2: Cross-Reference with Merged PRs
 
           1. Check if any PR title or body references the issue (e.g., "fixes #123", "closes #45")
           2. Check for semantic matches — PRs that change the same area or address the same problem
@@ -169,11 +225,15 @@ stages:
               "labels": ["bug"],
               "initial_assessment": "LIKELY_FIXED",
               "linked_prs": [45, 67],
-              "reasoning": "PR #45 title mentions fixing the auth timeout from this issue"
+              "reasoning": "PR #45 title mentions fixing the auth timeout from this issue",
+              "has_existing_finding": false,
+              "existing_finding_verdict": null,
+              "existing_finding_text": null
             }
           ]
 
-          Sort by assessment: NO_LINKED_PR first, then POSSIBLY_FIXED, then LIKELY_FIXED.
+          Sort by: issues WITHOUT existing findings first, then by assessment
+          (NO_LINKED_PR first, then POSSIBLY_FIXED, then LIKELY_FIXED).
         output: "initial_triage"
         parse_json: true
         timeout: 900
@@ -186,10 +246,14 @@ stages:
         {{initial_triage}}
 
         ---
+        **Note:** Issues marked with `has_existing_finding: true` have been
+        previously investigated. Their existing verdict is shown above.
+
         **Select issues for deep investigation.** Approve with one of:
 
-        - **"all"** — Investigate every issue above
-        - **"unsolved"** — Investigate only NO_LINKED_PR issues
+        - **"new"** — Only investigate issues WITHOUT existing findings *(DEFAULT)*
+        - **"all"** — Re-investigate everything including previously investigated
+        - **"unsolved"** — Investigate only NO_LINKED_PR issues (excludes existing findings)
         - **"12,34,56"** — Investigate specific issue numbers (comma-separated)
 
         Or **deny** to stop the workflow.
@@ -218,19 +282,30 @@ stages:
           triage=$(cat "$_triage_tmp")
           rm -f "$_triage_tmp"
 
-          # Default to "all" if user approved without a message
+          # Default to "new" if user approved without a message
           if [ -z "$selection" ]; then
-            selection="all"
+            selection="new"
           fi
 
+          # Identify issues with and without existing findings
+          has_finding=$(echo "$triage" | jq -c \
+            '[.[] | select(.has_existing_finding == true)]')
+          no_finding=$(echo "$triage" | jq -c \
+            '[.[] | select(.has_existing_finding != true)]')
+
           # Filter issues based on user's selection
-          if [ "$selection" = "all" ]; then
+          if [ "$selection" = "new" ]; then
+            # Only issues WITHOUT existing findings
+            selected=$(echo "$no_finding" | jq -c '.')
+          elif [ "$selection" = "all" ]; then
+            # All issues including previously investigated
             selected=$(echo "$triage" | jq -c '.')
           elif [ "$selection" = "unsolved" ]; then
-            selected=$(echo "$triage" | jq -c \
+            # NO_LINKED_PR issues without existing findings
+            selected=$(echo "$no_finding" | jq -c \
               '[.[] | select(.initial_assessment == "NO_LINKED_PR")]')
           else
-            # Parse comma-separated issue numbers
+            # Parse comma-separated issue numbers (explicit selection)
             numbers=$(echo "$selection" | tr ',' '\n' \
               | sed 's/[^0-9]//g' \
               | jq -R 'select(length > 0) | tonumber' \
@@ -238,6 +313,13 @@ stages:
             selected=$(echo "$triage" | jq -c --argjson nums "$numbers" \
               '[.[] | select(.issue_number as $n | $nums | index($n))]')
           fi
+
+          # Track HAS_FINDING issues that were NOT selected for investigation
+          skipped_findings=$(jq -nc \
+            --argjson has "$has_finding" \
+            --argjson sel "$selected" \
+            '[$has[] | select(.issue_number as $n |
+              [$sel[].issue_number] | index($n) | not)]')
 
           # Split selected issues into batches
           batch_size={{batch_size}}
@@ -256,13 +338,17 @@ stages:
             --argjson pr_batches "$pr_batches" \
             --argjson total "$(echo "$selected" | jq 'length')" \
             --argjson with_prs "$(echo "$issues_with_prs" | jq 'length')" \
+            --argjson skipped_has_finding "$skipped_findings" \
+            --argjson skipped_count "$(echo "$skipped_findings" | jq 'length')" \
             '{
               batches: $batches,
               pr_batches: $pr_batches,
               total_issues: $total,
               issues_with_prs: $with_prs,
               batch_count: ($batches | length),
-              pr_batch_count: ($pr_batches | length)
+              pr_batch_count: ($pr_batches | length),
+              skipped_has_finding: $skipped_has_finding,
+              skipped_count: $skipped_count
             }'
         output: "plan"
         parse_json: true
@@ -432,26 +518,186 @@ stages:
     approval:
       required: true
       prompt: |
-        ## Investigation Complete — Review Before Report
+        ## Investigation Complete — Review Before Proceeding
 
         **Issues investigated:** {{plan.total_issues}}
         **Issues with PR verification:** {{plan.issues_with_prs}}
+        **Issues skipped (existing findings):** {{plan.skipped_count}}
 
         ### Cross-Review Summary
         {{cross_review}}
 
         ---
-        **Approve** to generate the final triage report.
+        **Approve** to proceed with posting findings to GitHub issues and generating the report.
         **Deny** to stop here (findings are saved in the session).
       timeout: 0
       default: "deny"
 
   # ===========================================================================
-  # STAGE 3: REPORT
-  # Synthesize all findings into a structured report and write to file.
+  # STAGE 3: POST-FINDINGS
+  # Format triage findings as GitHub issue comments for review before posting.
+  # ===========================================================================
+  - name: "post-findings"
+    steps:
+      # --- Format cross-reviewed findings as GitHub issue comments ---
+      - id: "format-finding-comments"
+        agent: "foundation:zen-architect"
+        mode: "ARCHITECT"
+        provider_preferences:
+          - provider: anthropic
+            model: claude-sonnet-*
+          - provider: openai
+            model: gpt-*
+        prompt: |
+          Format triage findings as GitHub issue comments for **{{repo_name}}**.
+
+          ## Cross-Reviewed Findings
+          {{cross_review}}
+
+          ## Code Investigation Results
+          {{code_investigations}}
+
+          ## Initial Triage Data (includes has_existing_finding flags)
+          {{initial_triage}}
+
+          ## Instructions
+
+          Create a GitHub issue comment for each investigated issue that does **NOT**
+          have `has_existing_finding: true` in the initial triage data above.
+
+          **SKIP** any issue where `has_existing_finding` is `true` — do NOT generate
+          a comment for it (it already has one posted to GitHub).
+
+          Each comment body MUST follow this **exact** structure (pay close attention
+          to the first line):
+
+          Line 1: <!-- amplifier-triage-finding -->
+          Line 2: ## Triage Investigation — YYYY-MM-DD
+          Line 3: (blank)
+          Line 4: **Verdict:** SOLVED / PARTIALLY_SOLVED / UNSOLVED
+          Line 5: **Confidence:** X/10
+          Line 6: (blank)
+          Line 7: ### Evidence
+          Lines:  - **Files examined:** list of files and line ranges
+          Lines:  - **Findings:** specific evidence supporting the verdict
+          Line:   (blank)
+          Line:   ### Remaining Work
+          Lines:  Description of remaining work, or "None — issue appears fully resolved."
+          Line:   (blank)
+          Line:   ---
+          Line:   *Automated triage by amplifier-distro issue triage recipe*
+
+          **CRITICAL RULES:**
+          - The `<!-- amplifier-triage-finding -->` marker MUST be the VERY FIRST
+            line of the comment body. No blank lines, no whitespace before it.
+          - Use today's date (YYYY-MM-DD format) for the investigation header.
+          - Pull verdicts and confidence from the cross-review data (use the
+            `revised_verdict` and `confidence` fields).
+          - Pull evidence details from the code investigation results.
+
+          Return ONLY a JSON array (no markdown fences, no commentary):
+
+          [
+            {
+              "issue_number": 123,
+              "comment_body": "<!-- amplifier-triage-finding -->\n## Triage Investigation — 2026-03-05\n\n**Verdict:** SOLVED\n**Confidence:** 8/10\n\n### Evidence\n- **Files examined:** src/auth.py:45-67\n- **Findings:** The timeout logic was rewritten in commit abc123\n\n### Remaining Work\nNone — issue appears fully resolved.\n\n---\n*Automated triage by amplifier-distro issue triage recipe*"
+            }
+          ]
+
+          If ALL investigated issues already have existing findings (nothing to
+          post), return an empty array: []
+        output: "finding_comments"
+        parse_json: true
+        timeout: 900
+
+    approval:
+      required: true
+      prompt: |
+        ## Finding Comments Ready for Review
+
+        The following comments will be posted to GitHub issues in **{{repo_name}}**:
+
+        {{finding_comments}}
+
+        ---
+        Comments will NOT be posted for issues that already have triage findings.
+
+        **Approve** to post these comments to the respective GitHub issues.
+        **Deny** to skip posting (findings are still available in the session and
+        will appear in the report regardless).
+      timeout: 0
+      default: "deny"
+
+  # ===========================================================================
+  # STAGE 4: REPORT
+  # Post finding comments to GitHub, synthesize all findings into a structured
+  # report, and write to file.
   # ===========================================================================
   - name: "report"
     steps:
+      # --- Post finding comments to GitHub issues ---
+      - id: "post-finding-comments"
+        type: "bash"
+        command: |
+          set -euo pipefail
+
+          # Write finding comments JSON safely via heredoc
+          _comments_tmp=$(mktemp)
+          cat > "$_comments_tmp" << 'COMMENTS_JSON_EOF_8b4f1c'
+          {{finding_comments}}
+          COMMENTS_JSON_EOF_8b4f1c
+          comments=$(cat "$_comments_tmp")
+          rm -f "$_comments_tmp"
+
+          # Count comments to post
+          count=$(echo "$comments" | jq 'length')
+
+          if [ "$count" -eq 0 ]; then
+            echo "No comments to post (all investigated issues already have findings)."
+            jq -n '{posted: 0, failed: 0, total: 0}'
+            exit 0
+          fi
+
+          echo "Posting $count triage finding comment(s) to {{repo_name}}..."
+
+          # Post each comment using --body-file for safe content handling
+          posted=0
+          failed=0
+          _body_tmp=$(mktemp)
+
+          for i in $(seq 0 $((count - 1))); do
+            issue_num=$(echo "$comments" | jq -r ".[$i].issue_number")
+            echo "$comments" | jq -r ".[$i].comment_body" > "$_body_tmp"
+
+            echo "  Posting finding to issue #${issue_num}..."
+            if gh issue comment "$issue_num" --repo "{{repo_name}}" --body-file "$_body_tmp"; then
+              posted=$((posted + 1))
+              echo "    Posted to #${issue_num}"
+            else
+              failed=$((failed + 1))
+              echo "    Failed to post to #${issue_num}" >&2
+            fi
+
+            # Rate limit between posts
+            sleep 1
+          done
+
+          rm -f "$_body_tmp"
+
+          echo ""
+          echo "Results: $posted posted, $failed failed out of $count total"
+
+          # Output summary as JSON
+          jq -n \
+            --argjson posted "$posted" \
+            --argjson failed "$failed" \
+            --argjson total "$count" \
+            '{posted: $posted, failed: $failed, total: $total}'
+        output: "post_results"
+        parse_json: true
+        timeout: 300
+        on_error: "continue"
+
       # --- Synthesize all findings into a markdown report ---
       - id: "synthesize"
         agent: "foundation:zen-architect"
@@ -478,16 +724,24 @@ stages:
           ### Cross-Review (Independent Validation)
           {{cross_review}}
 
+          ### Previously Investigated Issues (Skipped)
+          {{plan.skipped_has_finding}}
+
+          ### Finding Comment Post Results
+          {{post_results}}
+
           ## Report Structure
 
           Generate a complete markdown report with these sections:
 
           # GitHub Issue Triage Report — {{repo_name}}
-          *Generated: [today's date] | Focus: {{focus}} | Issues analyzed: {{plan.total_issues}}*
+          *Generated: [today's date] | Focus: {{focus}} | Issues analyzed: {{plan.total_issues}} | Skipped (existing findings): {{plan.skipped_count}}*
 
           ## Executive Summary
           - Total issues analyzed, breakdown by verdict (SOLVED / PARTIALLY SOLVED / UNSOLVED)
+          - Issues skipped due to existing findings (count and reason)
           - Cross-review agreement rate and confidence levels
+          - Finding comments posted to GitHub (count and status)
           - Key findings and surprises
 
           ## Issues to Close (SOLVED)
@@ -499,13 +753,21 @@ stages:
           ## Issues Needing Attention (UNSOLVED)
           Per issue: current code state, root cause analysis, proposed solution, priority
 
+          ## Previously Investigated (Skipped)
+          For each issue in the "Previously Investigated Issues (Skipped)" data:
+          - Show the issue number, title, and their existing verdict
+          - Note when the previous investigation was performed (from finding text date)
+          - Flag if the existing verdict might be outdated based on recent PR activity
+          If no issues were skipped, write: "All issues were investigated in this run."
+
           ## Disputed Findings
           Where Agent A and the Reviewer disagreed — both perspectives, recommended resolution
 
           ## Recommendations
           1. Issues safe to close (with justification)
           2. Issues to prioritize (with reasoning)
-          3. Suggested next actions for the team
+          3. Previously investigated issues worth re-examining (if any)
+          4. Suggested next actions for the team
 
           ---
 
