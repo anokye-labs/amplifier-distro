@@ -17,3 +17,4 @@ build/
 *.tmp
 *.swp
 *.swo
+.ruff_cache
