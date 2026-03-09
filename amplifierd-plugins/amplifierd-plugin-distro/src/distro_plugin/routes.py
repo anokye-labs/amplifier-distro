@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypedDict
@@ -74,7 +75,8 @@ class ProviderRequest(BaseModel):
 
 
 class InterfacesData(BaseModel):
-    interfaces: list[str] = []
+    install_cli: bool = False
+    install_tui: bool = False
 
 
 class FeatureToggle(BaseModel):
@@ -209,24 +211,38 @@ def _build_status(settings: DistroPluginSettings) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def _uv_tool_install(package: str) -> tuple[bool, str]:
-    """Run ``uv tool install <package>`` asynchronously.
+_TOOLS: dict[str, tuple[str, str]] = {
+    "cli": ("amplifier", "git+https://github.com/microsoft/amplifier"),
+    "tui": ("amplifier-tui", "git+https://github.com/ramparte/amplifier-tui"),
+}
 
-    Returns ``(success, output)``."""
+
+async def _uv_tool_install(binary: str, package_url: str) -> dict[str, Any]:
+    """Run ``uv tool install <package_url>`` asynchronously.
+
+    Returns a status dict with ``status`` and ``installed`` keys."""
+    if shutil.which(binary) is not None:
+        return {"status": "ok", "installed": True}
     try:
         proc = await asyncio.create_subprocess_exec(
             "uv",
             "tool",
             "install",
-            package,
+            package_url,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
-        output = (stdout or b"").decode() + (stderr or b"").decode()
-        return proc.returncode == 0, output.strip()
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            detail = stderr.decode().strip() if stderr else "Install failed"
+            return {"status": "error", "detail": detail, "installed": False}
     except FileNotFoundError:
-        return False, "uv not found"
+        return {
+            "status": "error",
+            "detail": "uv is not installed. Install it first: https://docs.astral.sh/uv/",
+            "installed": False,
+        }
+    return {"status": "ok", "installed": shutil.which(binary) is not None}
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +351,15 @@ def create_routes() -> APIRouter:
 
         bridges = detect_bridges(settings)
 
+        # Load saved distro settings for pre-fill
+        ds = load_distro_settings(settings)
+        saved_root = (
+            ds.workspace_root if ds.workspace_root and ds.workspace_root != "~" else ""
+        )
+        workspace_root = saved_root or (
+            workspace_candidates[0] if workspace_candidates else ""
+        )
+
         return {
             "github": github,
             "git": git,
@@ -345,6 +370,10 @@ def create_routes() -> APIRouter:
             "github_user": gh_user,
             "git_name": git_name,
             "git_email": git_email,
+            "workspace_root": workspace_root,
+            "github_handle": ds.identity.github_handle or gh_user or "",
+            "cli_installed": shutil.which("amplifier") is not None,
+            "tui_installed": shutil.which("amplifier-tui") is not None,
         }
 
     # ------------------------------------------------------------------
@@ -441,12 +470,13 @@ def create_routes() -> APIRouter:
         settings = _get_settings(request)
         if body.workspace_root:
             update_distro_settings(settings, workspace_root=body.workspace_root)
-        update_distro_settings(
-            settings,
-            section="identity",
-            github_handle=body.github_handle,
-            git_email=body.git_email,
-        )
+        if body.github_handle or body.git_email:
+            kwargs: dict[str, str] = {}
+            if body.github_handle:
+                kwargs["github_handle"] = body.github_handle
+            if body.git_email:
+                kwargs["git_email"] = body.git_email
+            update_distro_settings(settings, section="identity", **kwargs)
         return {"status": "ok"}
 
     @router.post("/setup/steps/config")
@@ -476,19 +506,19 @@ def create_routes() -> APIRouter:
     @router.post("/setup/steps/interfaces")
     async def step_interfaces(request: Request, body: InterfacesData) -> dict[str, Any]:
         """Conditionally install CLI/TUI interfaces."""
-        cli_installed = False
-        tui_installed = False
-        if "cli" in body.interfaces:
-            ok, _ = await _uv_tool_install("amplifier-app-cli")
-            cli_installed = ok
-        if "tui" in body.interfaces:
-            ok, _ = await _uv_tool_install("amplifier-app-tui")
-            tui_installed = ok
-        return {
-            "status": "ok",
-            "cli_installed": cli_installed,
-            "tui_installed": tui_installed,
-        }
+        result: dict[str, Any] = {"status": "ok"}
+
+        for flag, key in [("install_cli", "cli"), ("install_tui", "tui")]:
+            if getattr(body, flag):
+                binary, url = _TOOLS[key]
+                res = await _uv_tool_install(binary, url)
+                if res["status"] == "error":
+                    result["status"] = "error"
+                    result[f"{key}_error"] = res.get("detail", "")
+
+        result["cli_installed"] = shutil.which("amplifier") is not None
+        result["tui_installed"] = shutil.which("amplifier-tui") is not None
+        return result
 
     @router.post("/setup/steps/provider")
     async def step_provider(request: Request, body: ProviderRequest) -> dict[str, Any]:
@@ -511,10 +541,20 @@ def create_routes() -> APIRouter:
         settings = _get_settings(request)
         phase = compute_phase(settings)
         ov_exists = overlay_exists(settings)
+        ds = load_distro_settings(settings)
         return {
+            "status": "ok",
             "phase": phase,
             "ready": phase == "ready",
             "overlay_exists": ov_exists,
+            "workspace_root": ds.workspace_root,
+            "github_handle": ds.identity.github_handle,
+            "has_api_key": any(
+                bool(os.environ.get(provider.env_var))
+                for provider in PROVIDERS.values()
+            ),
+            "cli_installed": shutil.which("amplifier") is not None,
+            "tui_installed": shutil.which("amplifier-tui") is not None,
         }
 
     # ------------------------------------------------------------------

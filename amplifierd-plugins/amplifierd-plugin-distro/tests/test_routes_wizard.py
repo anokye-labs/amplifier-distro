@@ -61,11 +61,16 @@ def test_step_modules_enables_requested_disables_unrequested(settings, client):
     assert "deliberate-dev" not in enabled
 
 
-def test_step_interfaces_skip_returns_ok(client):
-    """POST /distro/setup/steps/interfaces with empty list returns ok with install flags."""
+def test_step_interfaces_skip_returns_ok(client, monkeypatch):
+    """POST /distro/setup/steps/interfaces with no installs requested returns ok with install flags."""
+    import shutil as _shutil
+
+    # Mock shutil.which so the test is environment-independent: tools not on PATH
+    monkeypatch.setattr(_shutil, "which", lambda name: None)
+
     resp = client.post(
         "/distro/setup/steps/interfaces",
-        json={"interfaces": []},
+        json={"install_cli": False, "install_tui": False},
     )
     assert resp.status_code == 200
 
@@ -123,3 +128,166 @@ def test_step_verify_returns_status(settings, client):
     assert data["phase"] == "unconfigured"
     assert data["ready"] is False
     assert data["overlay_exists"] is False
+
+
+# ---------------------------------------------------------------------------
+# RED tests for Defect 1a: step_verify returns all 8 fields
+# ---------------------------------------------------------------------------
+
+
+def test_step_verify_returns_all_fields(settings, client):
+    """Defect 1a: POST /distro/setup/steps/verify must return all 8 fields the wizard HTML expects."""
+    resp = client.post("/distro/setup/steps/verify", json={})
+    assert resp.status_code == 200
+
+    data = resp.json()
+    # status field must be present
+    assert data.get("status") == "ok"
+    # already-present fields
+    assert "phase" in data
+    assert "ready" in data
+    assert "overlay_exists" in data
+    # missing fields that wizard HTML reads
+    assert "workspace_root" in data, "wizard reads data.workspace_root"
+    assert "github_handle" in data, "wizard reads data.github_handle"
+    assert "has_api_key" in data, "wizard reads data.has_api_key"
+    assert "cli_installed" in data, "wizard reads data.cli_installed"
+    assert "tui_installed" in data, "wizard reads data.tui_installed"
+
+
+# ---------------------------------------------------------------------------
+# RED tests for Defect 1b: step_welcome must not erase identity on empty fields
+# ---------------------------------------------------------------------------
+
+
+def test_step_welcome_empty_fields_do_not_erase_identity(settings, client):
+    """Defect 1b: POST /distro/setup/steps/welcome with empty handle/email must preserve existing values."""
+    from distro_plugin.distro_settings import update as update_distro_settings
+
+    # Pre-populate identity in distro settings
+    update_distro_settings(
+        settings,
+        section="identity",
+        github_handle="existing-user",
+        git_email="old@example.com",
+    )
+
+    # POST with all empty identity fields (but a valid workspace_root)
+    resp = client.post(
+        "/distro/setup/steps/welcome",
+        json={
+            "workspace_root": "/home/user/new-workspace",
+            "github_handle": "",
+            "git_email": "",
+        },
+    )
+    assert resp.status_code == 200
+
+    ds = load_distro_settings(settings)
+    # Identity must NOT have been erased
+    assert ds.identity.github_handle == "existing-user", (
+        "github_handle was erased by empty string"
+    )
+    assert ds.identity.git_email == "old@example.com", (
+        "git_email was erased by empty string"
+    )
+    # workspace_root was non-empty so it should have been updated
+    assert ds.workspace_root == "/home/user/new-workspace"
+
+
+# ---------------------------------------------------------------------------
+# RED tests for Defect 2a: get_detect missing flat convenience fields
+# ---------------------------------------------------------------------------
+
+
+def test_get_detect_includes_flat_convenience_fields(settings, client):
+    """Defect 2a: GET /distro/detect must return workspace_root, github_handle, cli_installed, tui_installed."""
+    resp = client.get("/distro/detect")
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert "workspace_root" in data, "wizard JS reads data.workspace_root"
+    assert "github_handle" in data, (
+        "wizard JS reads data.github_handle (not github_user)"
+    )
+    assert "cli_installed" in data, "wizard JS reads data.cli_installed"
+    assert "tui_installed" in data, "wizard JS reads data.tui_installed"
+
+
+# ---------------------------------------------------------------------------
+# RED tests for Defect 2b: InterfacesData must use bool flags, not list
+# ---------------------------------------------------------------------------
+
+
+def test_step_interfaces_accepts_bool_flags(client):
+    """Defect 2b: POST /distro/setup/steps/interfaces must accept {install_cli: bool, install_tui: bool}."""
+    resp = client.post(
+        "/distro/setup/steps/interfaces",
+        json={"install_cli": False, "install_tui": False},
+    )
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert data.get("status") == "ok"
+    assert "cli_installed" in data
+    assert "tui_installed" in data
+
+
+# ---------------------------------------------------------------------------
+# RED tests for Defect 2c + 2d: correct package URLs and shutil.which check
+# ---------------------------------------------------------------------------
+
+
+def test_step_interfaces_install_cli_uses_correct_git_url(client, monkeypatch):
+    """Defect 2c: install_cli=True must invoke uv with the correct git URL, not 'amplifier-app-cli'."""
+    calls = []
+
+    async def fake_uv_install(binary, package_url):
+        calls.append((binary, package_url))
+        return {"status": "ok", "installed": True}
+
+    monkeypatch.setattr("distro_plugin.routes._uv_tool_install", fake_uv_install)
+
+    resp = client.post(
+        "/distro/setup/steps/interfaces",
+        json={"install_cli": True, "install_tui": False},
+    )
+    assert resp.status_code == 200
+
+    assert len(calls) == 1, "expected exactly one _uv_tool_install call"
+    binary, url = calls[0]
+    assert binary == "amplifier", f"wrong binary: {binary}"
+    assert url == "git+https://github.com/microsoft/amplifier", (
+        f"wrong package URL: {url}"
+    )
+
+
+def test_step_interfaces_uses_shutil_which_for_installed_flag(client, monkeypatch):
+    """Defect 2d: cli_installed/tui_installed in response must come from shutil.which, not uv exit code."""
+
+    # Make _uv_tool_install succeed (simulating a successful install)
+    async def fake_uv_install(binary, package_url):
+        return {"status": "ok", "installed": True}
+
+    monkeypatch.setattr("distro_plugin.routes._uv_tool_install", fake_uv_install)
+
+    # shutil.which returns None for both (tool not actually on PATH even though uv "succeeded").
+    # Patch via the shutil module directly; routes.py imports shutil and calls shutil.which(...)
+    import shutil as _shutil
+
+    monkeypatch.setattr(_shutil, "which", lambda name: None)
+
+    resp = client.post(
+        "/distro/setup/steps/interfaces",
+        json={"install_cli": True, "install_tui": True},
+    )
+    assert resp.status_code == 200
+
+    data = resp.json()
+    # Even though uv "succeeded", shutil.which returned None → both must be False
+    assert data["cli_installed"] is False, (
+        "cli_installed must reflect shutil.which, not uv exit code"
+    )
+    assert data["tui_installed"] is False, (
+        "tui_installed must reflect shutil.which, not uv exit code"
+    )
