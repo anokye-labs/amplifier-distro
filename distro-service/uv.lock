@@ -3,19 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
-name = "amplifier-core"
-version = "1.1.1"
-source = { git = "https://github.com/microsoft/amplifier-core#adab1f3a6d07bade27fd38d15b4dfadb4d1891b8" }
-dependencies = [
-    { name = "click" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "tomli" },
-    { name = "typing-extensions" },
-]
-
-[[package]]
-name = "amplifier-distro"
+name = "amp-distro"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -28,7 +16,19 @@ dependencies = [
 requires-dist = [
     { name = "amplifierd", git = "https://github.com/microsoft/amplifierd?rev=main" },
     { name = "amplifierd-plugin-chat", git = "https://github.com/payneio/amplifierd-plugin-chat?rev=main" },
-    { name = "amplifierd-plugin-distro", editable = "amplifierd-plugins/amplifierd-plugin-distro" },
+    { name = "amplifierd-plugin-distro", editable = "../amplifierd-plugins/amplifierd-plugin-distro" },
+]
+
+[[package]]
+name = "amplifier-core"
+version = "1.1.1"
+source = { git = "https://github.com/microsoft/amplifier-core#adab1f3a6d07bade27fd38d15b4dfadb4d1891b8" }
+dependencies = [
+    { name = "click" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "tomli" },
+    { name = "typing-extensions" },
 ]
 
 [[package]]
@@ -69,7 +69,7 @@ dependencies = [
 [[package]]
 name = "amplifierd-plugin-distro"
 version = "0.1.0"
-source = { editable = "amplifierd-plugins/amplifierd-plugin-distro" }
+source = { editable = "../amplifierd-plugins/amplifierd-plugin-distro" }
 dependencies = [
     { name = "fastapi" },
     { name = "pydantic-settings" },
