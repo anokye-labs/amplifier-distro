@@ -11,6 +11,7 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -38,11 +39,150 @@ _state: dict[str, Any] = {}
 # Shared aiohttp session for Socket Mode connections.
 _slack_aiohttp_session: Any = None
 
+# Lock to prevent concurrent reinitialize() calls.
+_reinitialize_lock = asyncio.Lock()
+
 
 def _get_state() -> dict[str, Any]:
     if not _state:
         raise RuntimeError("Slack bridge not initialized.")
     return _state
+
+
+async def _start_socket_mode(config: SlackConfig) -> None:
+    """Start Socket Mode adapter; stores the adapter in _state. Cleans up on failure."""
+    global _slack_aiohttp_session
+    if not (config.socket_mode and config.is_configured):
+        return
+    try:
+        import aiohttp
+
+        from .socket_mode import SocketModeAdapter
+
+        _slack_aiohttp_session = aiohttp.ClientSession()
+        adapter = SocketModeAdapter(
+            config, _state["event_handler"], session=_slack_aiohttp_session
+        )
+        _state["socket_adapter"] = adapter
+        await adapter.start()
+        logger.info("Socket Mode connection started")
+    except ImportError:
+        logger.warning(
+            "Socket Mode requires aiohttp: pip install amplifierd-plugin-slack[socket]"
+        )
+    except Exception:
+        if _slack_aiohttp_session is not None and not _slack_aiohttp_session.closed:
+            await _slack_aiohttp_session.close()
+        _slack_aiohttp_session = None
+        logger.exception("Socket Mode startup failed; Slack bridge degraded")
+
+
+async def reinitialize() -> dict[str, Any]:
+    """Reinitialize the Slack bridge without a server restart."""
+    if _reinitialize_lock.locked():
+        return {
+            "status": "already_in_progress",
+            "mode": "unknown",
+            "is_configured": False,
+        }
+    async with _reinitialize_lock:
+        global _slack_aiohttp_session
+
+        # Shutdown existing bridge
+        socket_adapter = _state.get("socket_adapter")
+        if socket_adapter is not None:
+            await socket_adapter.stop()
+
+        existing_session_manager: SlackSessionManager | None = _state.get(
+            "session_manager"
+        )
+        existing_backend: SessionManagerAdapter | None = _state.get("backend")
+        if existing_session_manager is not None and existing_backend is not None:
+            for mapping in existing_session_manager.list_active():
+                try:
+                    await existing_backend.end_session(mapping.session_id)
+                except (RuntimeError, ValueError, ConnectionError, OSError):
+                    logger.exception("Error ending session %s", mapping.session_id)
+
+        if _slack_aiohttp_session is not None and not _slack_aiohttp_session.closed:
+            await _slack_aiohttp_session.close()
+        _slack_aiohttp_session = None
+
+        # Preserve the amplifierd state reference before clearing
+        amplifierd_state = _state.get("_amplifierd_state")
+
+        # Clear state
+        _state.clear()
+
+        # Re-read config from env
+        config = SlackConfig.from_env()
+        _state["config"] = config
+
+        # Rebuild client
+        client: SlackClient
+        if config.simulator_mode or not config.is_configured:
+            client = MemorySlackClient()
+            config.simulator_mode = True
+        else:
+            from .client import HttpSlackClient
+
+            client = HttpSlackClient(config.bot_token)
+
+        # Rebuild backend + persistence (requires stored amplifierd state)
+        if amplifierd_state is not None:
+            new_backend: SessionManagerAdapter = SessionManagerAdapter(
+                amplifierd_state.session_manager
+            )
+            plugins_dir: Path = getattr(
+                amplifierd_state.settings,
+                "plugins_dir",
+                Path.home() / ".amplifierd" / "plugins",
+            )
+            persistence_path: Path | None = (
+                plugins_dir / "slack" / "slack-sessions.json"
+                if not config.simulator_mode
+                else None
+            )
+        else:
+            # Fallback: reuse the existing backend if amplifierd state is unavailable
+            new_backend = existing_backend  # type: ignore[assignment]
+            persistence_path = None
+
+        discovery = AmplifierDiscovery()
+        new_session_manager = SlackSessionManager(
+            client, new_backend, config, persistence_path
+        )
+        new_command_handler = CommandHandler(new_session_manager, discovery, config)
+        new_event_handler = SlackEventHandler(
+            client, new_session_manager, new_command_handler, config
+        )
+
+        _state.update(
+            {
+                "_amplifierd_state": amplifierd_state,
+                "config": config,
+                "client": client,
+                "backend": new_backend,
+                "discovery": discovery,
+                "session_manager": new_session_manager,
+                "command_handler": new_command_handler,
+                "event_handler": new_event_handler,
+            }
+        )
+
+        # Simulator wiring
+        if config.simulator_mode and isinstance(client, MemorySlackClient):
+            wire_client_to_hub(client)
+            set_bridge_state(dict(_state))
+
+        # Start socket mode if configured
+        await _start_socket_mode(config)
+
+        return {
+            "status": "reinitialized",
+            "mode": config.mode,
+            "is_configured": config.is_configured,
+        }
 
 
 def create_router(state: Any) -> APIRouter:
@@ -70,7 +210,9 @@ def create_router(state: Any) -> APIRouter:
     backend = SessionManagerAdapter(state.session_manager)
 
     # --- Session persistence ---
-    plugins_dir: Path = getattr(state.settings, "plugins_dir", Path.home() / ".amplifierd" / "plugins")
+    plugins_dir: Path = getattr(
+        state.settings, "plugins_dir", Path.home() / ".amplifierd" / "plugins"
+    )
     persistence_path = (
         plugins_dir / "slack" / "slack-sessions.json"
         if not config.simulator_mode
@@ -83,6 +225,7 @@ def create_router(state: Any) -> APIRouter:
     event_handler = SlackEventHandler(client, session_manager, command_handler, config)
 
     bridge_state = {
+        "_amplifierd_state": state,
         "config": config,
         "client": client,
         "backend": backend,
@@ -102,28 +245,8 @@ def create_router(state: Any) -> APIRouter:
 
     @router.on_event("startup")
     async def on_startup() -> None:
-        global _slack_aiohttp_session
         logger.info("Slack bridge initialized (mode: %s)", config.mode)
-
-        if config.socket_mode and config.is_configured:
-            try:
-                import aiohttp
-
-                from .socket_mode import SocketModeAdapter
-
-                _slack_aiohttp_session = aiohttp.ClientSession()
-                adapter = SocketModeAdapter(
-                    config, event_handler, session=_slack_aiohttp_session
-                )
-                _state["socket_adapter"] = adapter
-                await adapter.start()
-                logger.info("Socket Mode connection started")
-            except ImportError:
-                logger.warning(
-                    "Socket Mode requires aiohttp: pip install amplifierd-plugin-slack[socket]"
-                )
-            except Exception:
-                logger.exception("Socket Mode startup failed; Slack bridge degraded")
+        await _start_socket_mode(config)
 
     @router.on_event("shutdown")
     async def on_shutdown() -> None:

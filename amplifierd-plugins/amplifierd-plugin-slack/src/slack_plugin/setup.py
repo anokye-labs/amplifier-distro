@@ -44,6 +44,10 @@ _PLUGIN_CONFIG_FILE = "config.yaml"
 # --- The Slack App Manifest (for one-click app creation) ---
 
 SLACK_APP_MANIFEST = {
+    "_metadata": {
+        "major_version": 1,
+        "minor_version": 1,
+    },
     "display_information": {
         "name": "Amplifier Bridge",
         "description": "Connects Slack to Amplifier AI sessions",
@@ -71,6 +75,8 @@ SLACK_APP_MANIFEST = {
                 "im:history",
                 "im:read",
                 "im:write",
+                "groups:history",
+                "groups:read",
             ],
         },
     },
@@ -281,9 +287,15 @@ async def setup_status() -> dict[str, Any]:
 
     bot_token = os.environ.get("SLACK_BOT_TOKEN", "") or keys.get("SLACK_BOT_TOKEN", "")
     app_token = os.environ.get("SLACK_APP_TOKEN", "") or keys.get("SLACK_APP_TOKEN", "")
-    hub_channel_id = os.environ.get("SLACK_HUB_CHANNEL_ID", "") or cfg.get("hub_channel_id", "")
+    hub_channel_id = os.environ.get("SLACK_HUB_CHANNEL_ID", "") or cfg.get(
+        "hub_channel_id", ""
+    )
     sm_env = os.environ.get("SLACK_SOCKET_MODE", "")
-    socket_mode = sm_env.lower() in ("1", "true", "yes") if sm_env else cfg.get("socket_mode", False)
+    socket_mode = (
+        sm_env.lower() in ("1", "true", "yes")
+        if sm_env
+        else cfg.get("socket_mode", False)
+    )
 
     steps = {
         "bot_token": bool(bot_token),
@@ -484,3 +496,14 @@ async def get_manifest() -> dict[str, Any]:
         ),
         "create_url": "https://api.slack.com/apps?new_app=1",
     }
+
+
+@router.post("/activate")
+async def activate_bridge() -> dict[str, Any]:
+    """Reinitialize the Slack bridge without a server restart."""
+    from . import reinitialize as _reinitialize
+
+    try:
+        return await _reinitialize()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
