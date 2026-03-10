@@ -138,6 +138,8 @@ body {
   color: var(--ink-slate);
 }
 
+.label-aside { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink-fog); }
+
 .field input, .field select {
   width: 100%;
   padding: 10px 14px;
@@ -384,6 +386,12 @@ body {
         <input type="password" id="botToken" placeholder="xoxb-..." autocomplete="off" spellcheck="false">
         <div class="validation none" id="botStatus"></div>
       </div>
+      <div class="field">
+        <label for="signingSecret">Signing Secret <span class="label-aside">(optional)</span></label>
+        <p class="field-hint">Settings &gt; Basic Information &gt; App Credentials</p>
+        <p class="field-note">Only needed for Events API mode. Not required for Socket Mode.</p>
+        <input type="password" id="signingSecret" placeholder="e.g. a1b2c3d4..." autocomplete="off" spellcheck="false">
+      </div>
       <button class="btn btn-primary" id="validateBtn" disabled>Validate Tokens</button>
       <div id="validateFeedback"></div>
     </div>
@@ -449,6 +457,7 @@ const copyManifest = document.getElementById('copyManifest');
 const createAppLink = document.getElementById('createAppLink');
 const botToken = document.getElementById('botToken');
 const appToken = document.getElementById('appToken');
+const signingSecret = document.getElementById('signingSecret');
 const botStatus = document.getElementById('botStatus');
 const appStatus = document.getElementById('appStatus');
 const validateBtn = document.getElementById('validateBtn');
@@ -486,6 +495,10 @@ async function loadManifest() {
     const data = await res.json();
     manifest_yaml = data.manifest_yaml;
     manifestBox.textContent = manifest_yaml;
+
+    // Pre-fill the Create App link with the manifest YAML
+    const encodedManifest = encodeURIComponent(manifest_yaml);
+    createAppLink.href = 'https://api.slack.com/apps?new_app=1&manifest_yaml=' + encodedManifest;
 
     // Enable step 2 once manifest is loaded (user can work on step 1 while
     // coming back to paste tokens)
@@ -676,6 +689,7 @@ saveBtn.addEventListener('click', async () => {
       body: JSON.stringify({
         bot_token: validatedBot,
         app_token: validatedApp,
+        signing_secret: signingSecret.value.trim(),
         hub_channel_id: channelId,
         hub_channel_name: channelName,
         socket_mode: Boolean(validatedApp),
@@ -700,6 +714,27 @@ saveBtn.addEventListener('click', async () => {
 
     const testData = await testRes.json();
 
+    // Activate bridge regardless of test result
+    saveBtn.innerHTML = '<span class="spinner"></span> Activating bridge...';
+    let activateHtml = '';
+    try {
+      const activateCtrl = new AbortController();
+      const activateTimer = setTimeout(() => activateCtrl.abort(), 15000);
+      const activateRes = await fetch(API + '/activate', {
+        method: 'POST',
+        signal: activateCtrl.signal,
+      });
+      clearTimeout(activateTimer);
+      const activateData = await activateRes.json();
+      if (activateRes.ok) {
+        activateHtml = '<div class="success-msg">Bridge activated (mode: ' + esc(activateData.mode) + ').</div>';
+      } else {
+        activateHtml = '<div class="error-msg">Bridge activation failed: ' + esc(activateData.detail || JSON.stringify(activateData)) + '</div>';
+      }
+    } catch (activateErr) {
+      activateHtml = '<div class="error-msg">Bridge activation error: ' + esc(activateErr.message) + '</div>';
+    }
+
     if (testData.success) {
       markDone(step4);
       saveFeedback.innerHTML =
@@ -707,14 +742,15 @@ saveBtn.addEventListener('click', async () => {
         'Connected! Check <strong>#' + esc(channelName) + '</strong> in Slack for the test message.<br>' +
         '<small>Secrets saved to <code>' + esc(saveData.keys_path) + '</code><br>' +
         'Config saved to <code>' + esc(saveData.config_path) + '</code></small>' +
-        '</div>';
+        '</div>' + activateHtml;
       saveBtn.innerHTML = 'Connected';
     } else {
       saveFeedback.innerHTML =
         '<div class="success-msg">Config saved. Mode: ' + esc(saveData.mode) + '</div>' +
         '<div class="error-msg">Test message failed: ' + esc(testData.hint || testData.error) +
         '<br><small>Config is saved - the bridge will work once the issue is resolved. ' +
-        'Most common fix: <code>/invite @amplifier</code> in the channel.</small></div>';
+        'Most common fix: <code>/invite @amplifier</code> in the channel.</small></div>' +
+        activateHtml;
       saveBtn.innerHTML = 'Save &amp; Test Connection';
       saveBtn.disabled = false;
     }
