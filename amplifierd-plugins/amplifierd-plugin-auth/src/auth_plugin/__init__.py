@@ -40,10 +40,16 @@ def create_router(state: Any) -> APIRouter:
         return router
 
     # Import heavy deps only when actually activating
-    from auth_plugin.pam import get_or_create_secret
+    from auth_plugin.pam import get_or_create_secret, verify_session_token
     from auth_plugin.routes import create_auth_router
 
     secret = get_or_create_secret()
+
+    # Expose a verify callable so SessionAuthMiddleware (in amplifierd) can
+    # validate session cookies without importing from the auth plugin directly.
+    # The middleware reads this from app.state at dispatch time.
+    state.auth_verify_session = lambda token: verify_session_token(token, secret)
+
     auth_router = create_auth_router(secret)
     router.include_router(auth_router)
 
