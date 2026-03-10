@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -8,19 +8,23 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "amplifierd" },
+    { name = "amplifierd-plugin-auth" },
     { name = "amplifierd-plugin-chat" },
     { name = "amplifierd-plugin-distro" },
     { name = "amplifierd-plugin-slack" },
     { name = "amplifierd-plugin-voice" },
+    { name = "click" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "amplifierd", editable = "../../amplifierd" },
+    { name = "amplifierd-plugin-auth", editable = "../amplifierd-plugins/amplifierd-plugin-auth" },
     { name = "amplifierd-plugin-chat", git = "https://github.com/payneio/amplifierd-plugin-chat?rev=main" },
     { name = "amplifierd-plugin-distro", editable = "../amplifierd-plugins/amplifierd-plugin-distro" },
     { name = "amplifierd-plugin-slack", editable = "../amplifierd-plugins/amplifierd-plugin-slack" },
-    { name = "amplifierd-plugin-voice", editable = "../../amplifier-voice" },
+    { name = "amplifierd-plugin-voice", git = "https://github.com/microsoft/amplifier-voice?rev=main" },
+    { name = "click", specifier = ">=8.1.0" },
 ]
 
 [[package]]
@@ -98,6 +102,28 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
+name = "amplifierd-plugin-auth"
+version = "0.1.0"
+source = { editable = "../amplifierd-plugins/amplifierd-plugin-auth" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "itsdangerous" },
+    { name = "python-multipart" },
+    { name = "python-pam", marker = "sys_platform == 'linux'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1" },
+    { name = "itsdangerous", specifier = ">=2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.5" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "python-pam", marker = "sys_platform == 'linux'", specifier = ">=2.0.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "amplifierd-plugin-chat"
 version = "0.1.0"
 source = { git = "https://github.com/payneio/amplifierd-plugin-chat?rev=main#6c09883f1dbccbb0dc5c222df9282c13c8e233ee" }
@@ -163,38 +189,12 @@ provides-extras = ["socket", "dev", "test"]
 [[package]]
 name = "amplifierd-plugin-voice"
 version = "0.1.0"
-source = { editable = "../../amplifier-voice" }
+source = { git = "https://github.com/microsoft/amplifier-voice?rev=main#a501ae233ec0c16cfa805b159ff788a9e96207e4" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "amplifierd", marker = "extra == 'dev'", git = "https://github.com/microsoft/amplifierd" },
-    { name = "amplifierd", marker = "extra == 'standalone'", git = "https://github.com/microsoft/amplifierd" },
-    { name = "click", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "click", marker = "extra == 'standalone'", specifier = ">=8.0" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "httpx", marker = "extra == 'test'" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pydantic-settings", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "pytest-anyio", marker = "extra == 'test'" },
-    { name = "pytest-asyncio", marker = "extra == 'test'" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.30" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'standalone'", specifier = ">=0.30" },
-]
-provides-extras = ["standalone", "dev", "test"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-asyncio", specifier = ">=1.3.0" },
 ]
 
 [[package]]
@@ -350,6 +350,15 @@ wheels = [
 ]
 
 [[package]]
+name = "itsdangerous"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/cb/8ac0172223afbccb63986cc25049b154ecfb5e85932587206f42317be31d/itsdangerous-2.2.0.tar.gz", hash = "sha256:e0050c0b7da1eea53ffaf149c0cfbb5c6e2e2b69c4bef22c81fa6eb73e5f6173", size = 54410, upload-time = "2024-04-16T21:28:15.614Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/96/92447566d16df59b2a776c0fb82dbc4d9e07cd95062562af01e408583fc4/itsdangerous-2.2.0-py3-none-any.whl", hash = "sha256:c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef", size = 16234, upload-time = "2024-04-16T21:28:14.499Z" },
+]
+
+[[package]]
 name = "pydantic"
 version = "2.12.5"
 source = { registry = "https://pypi.org/simple" }
@@ -456,6 +465,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
+]
+
+[[package]]
+name = "python-multipart"
+version = "0.0.22"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/01/979e98d542a70714b0cb2b6728ed0b7c46792b695e3eaec3e20711271ca3/python_multipart-0.0.22.tar.gz", hash = "sha256:7340bef99a7e0032613f56dc36027b959fd3b30a787ed62d310e951f7c3a3a58", size = 37612, upload-time = "2026-01-25T10:15:56.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/d0/397f9626e711ff749a95d96b7af99b9c566a9bb5129b8e4c10fc4d100304/python_multipart-0.0.22-py3-none-any.whl", hash = "sha256:2b2cd894c83d21bf49d702499531c7bafd057d730c201782048f7945d82de155", size = 24579, upload-time = "2026-01-25T10:15:54.811Z" },
+]
+
+[[package]]
+name = "python-pam"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/da/879f1c849e886b783239b8a4710daac73535ba2cfcf672ee4548543e3a74/python-pam-2.0.2.tar.gz", hash = "sha256:97235235ba9b82dbae8068d1099508455949b275f77273ca22fdbd8b1fb5d950", size = 11439, upload-time = "2022-03-18T00:32:09.856Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/2d/9fbb3bd686a474d76fbd0b79abdcc016f3da760b1d1c2048bf4c611a4939/python_pam-2.0.2-py3-none-any.whl", hash = "sha256:4ac51dd8953ac59aa45505882b565eef6a22e0423dcf25d63369902080416c20", size = 10658, upload-time = "2022-03-18T00:32:07.802Z" },
 ]
 
 [[package]]

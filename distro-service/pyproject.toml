@@ -22,7 +22,7 @@ amp-distro = "amplifier_distro.cli:main"
 amplifierd = { path = "../../amplifierd", editable = true }
 amplifierd-plugin-distro = { path = "../amplifierd-plugins/amplifierd-plugin-distro", editable = true }
 amplifierd-plugin-slack = { path = "../amplifierd-plugins/amplifierd-plugin-slack", editable = true }
-amplifierd-plugin-voice = { path = "../../amplifier-voice", editable = true }
+# amplifierd-plugin-voice — now a proper remote dep, no local override needed
 amplifierd-plugin-auth = { path = "../amplifierd-plugins/amplifierd-plugin-auth", editable = true }
 # amplifierd-plugin-chat = { path = "../../amplifierd-plugin-chat", editable = true }
 
