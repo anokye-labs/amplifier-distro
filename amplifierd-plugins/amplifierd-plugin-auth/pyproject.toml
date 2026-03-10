@@ -7,6 +7,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "itsdangerous>=2.0",
     "python-pam>=2.0.0; sys_platform == 'linux'",
+    "six",  # undeclared transitive dep of python-pam
     "python-multipart>=0.0.9",
 ]
 
