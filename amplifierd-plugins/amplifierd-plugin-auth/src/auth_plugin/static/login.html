@@ -133,7 +133,10 @@
     errorDiv.style.display = 'none';
     errorDiv.textContent = '';
 
-    fetch('/login', {
+    // Preserve ?next= param so the POST redirect lands on the original page
+    var loginUrl = '/login' + window.location.search;
+
+    fetch(loginUrl, {
       method: 'POST',
       body: new FormData(form),
       redirect: 'follow'

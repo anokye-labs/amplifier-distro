@@ -65,8 +65,14 @@ def create_auth_router(
                 content={"error": "Authentication failed"},
             )
 
+        # Redirect back to the page that triggered the login, or / as fallback
+        next_url = request.query_params.get("next", "/")
+        # Basic safety: only allow relative paths to prevent open redirects
+        if not next_url.startswith("/") or next_url.startswith("//"):
+            next_url = "/"
+
         token = create_session_token(username, secret)
-        response = RedirectResponse(url="/", status_code=303)
+        response = RedirectResponse(url=next_url, status_code=303)
         response.set_cookie(
             key=COOKIE_NAME,
             value=token,
