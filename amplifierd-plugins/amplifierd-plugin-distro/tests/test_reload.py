@@ -63,7 +63,7 @@ async def test_request_reload_cancels_and_restarts():
             return_value=MagicMock(distro_home="/fake/home"),
         ),
         patch("distro_plugin.reload.overlay_exists", return_value=False),
-        patch("distro_plugin.reload._prewarm", fake_prewarm),
+        patch("distro_plugin.reload.prewarm", fake_prewarm),
     ):
         from distro_plugin.reload import _do_reload
 
@@ -166,7 +166,7 @@ async def test_reload_reregisters_overlay(tmp_path):
             return_value=fake_settings,
         ),
         patch("distro_plugin.reload.overlay_exists", return_value=True),
-        patch("distro_plugin.reload._prewarm", fake_prewarm),
+        patch("distro_plugin.reload.prewarm", fake_prewarm),
     ):
         from distro_plugin.reload import _do_reload
 
@@ -205,7 +205,7 @@ async def test_reload_calls_registry_update():
             return_value=MagicMock(distro_home="/fake"),
         ),
         patch("distro_plugin.reload.overlay_exists", return_value=False),
-        patch("distro_plugin.reload._prewarm", fake_prewarm),
+        patch("distro_plugin.reload.prewarm", fake_prewarm),
     ):
         from distro_plugin.reload import _do_reload
 
@@ -248,7 +248,7 @@ async def test_reload_clears_prepared_bundle():
             return_value=MagicMock(distro_home="/fake"),
         ),
         patch("distro_plugin.reload.overlay_exists", return_value=False),
-        patch("distro_plugin.reload._prewarm", fake_prewarm),
+        patch("distro_plugin.reload.prewarm", fake_prewarm),
     ):
         from distro_plugin.reload import _do_reload
 
@@ -283,7 +283,7 @@ async def test_reload_clears_bundles_ready():
             return_value=MagicMock(distro_home="/fake"),
         ),
         patch("distro_plugin.reload.overlay_exists", return_value=False),
-        patch("distro_plugin.reload._prewarm", fake_prewarm),
+        patch("distro_plugin.reload.prewarm", fake_prewarm),
     ):
         from distro_plugin.reload import _do_reload
 

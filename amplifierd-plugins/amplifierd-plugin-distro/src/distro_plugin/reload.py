@@ -18,13 +18,13 @@ from typing import Any
 from distro_plugin.config import DistroPluginSettings
 from distro_plugin.overlay import overlay_exists
 
-# Lazy import of _prewarm from amplifierd — amplifierd is only available at
+# Lazy import of prewarm from amplifierd — amplifierd is only available at
 # runtime (not in tests unless installed).  We expose a module-level name so
-# tests can patch distro_plugin.reload._prewarm without importing amplifierd.
+# tests can patch distro_plugin.reload.prewarm without importing amplifierd.
 try:
-    from amplifierd.app import _prewarm  # type: ignore[import-untyped]
+    from amplifierd.app import prewarm  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover
-    _prewarm = None  # type: ignore[assignment]
+    prewarm = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,13 @@ async def _do_reload(app: Any) -> None:
         return
 
     # 1. Cancel in-flight prewarm task — SERIAL cancellation
-    #    await old_task after cancel() to prevent concurrent subprocess runs
+    #
+    # NOTE: asyncio.to_thread() does not interrupt the worker thread —
+    # cancel() only detaches the awaiter. The thread running subprocess.run()
+    # (uv pip install) will complete on its own. This means a brief period of
+    # overlapping work is possible, but uv uses file locks so this is safe.
+    # We await the old task to ensure we don't start a NEW prewarm until
+    # the cancellation is processed in the async layer.
     old_task = getattr(app.state, "prewarm_task", None)
     if old_task and not old_task.done():
         old_task.cancel()
@@ -82,7 +88,12 @@ async def _do_reload(app: Any) -> None:
         logger.info("Cancelled in-flight prewarm task")
 
     # 2. Re-register overlay (in case it was just created by the wizard)
-    plugin_settings = DistroPluginSettings()
+    # Prefer stored settings from app.state to avoid re-reading env/disk on
+    # every reload; fall back to constructing fresh settings if unavailable.
+    distro_state = getattr(app.state, "distro", None)
+    plugin_settings = distro_state.settings if distro_state else None
+    if not plugin_settings:
+        plugin_settings = DistroPluginSettings()
     if overlay_exists(plugin_settings):
         overlay_dir = str(Path(plugin_settings.distro_home) / "bundle")
         registry.register({"distro": overlay_dir})
@@ -102,11 +113,11 @@ async def _do_reload(app: Any) -> None:
     if session_manager and hasattr(session_manager, "clear_prepared_bundle"):
         session_manager.clear_prepared_bundle()
 
-    # 5. Start new prewarm task — uses module-level _prewarm (patchable in tests)
-    if _prewarm is None:  # pragma: no cover
-        logger.warning("Cannot start new prewarm: amplifierd._prewarm not available")
+    # 5. Start new prewarm task — uses module-level prewarm (patchable in tests)
+    if prewarm is None:  # pragma: no cover
+        logger.warning("Cannot start new prewarm: amplifierd.prewarm not available")
         return
-    new_task = asyncio.create_task(_prewarm(app))
+    new_task = asyncio.create_task(prewarm(app))
     app.state.prewarm_task = new_task
     background_tasks = getattr(app.state, "background_tasks", None)
     if background_tasks is not None:
