@@ -98,6 +98,7 @@ async def _do_reload(app: Any) -> None:
     if bundles_ready:
         bundles_ready.clear()
     app.state.prewarm_error = None
+    app.state.prepared_bundle = None
 
     # 5. Start new prewarm task — uses module-level _prewarm (patchable in tests)
     if _prewarm is None:  # pragma: no cover

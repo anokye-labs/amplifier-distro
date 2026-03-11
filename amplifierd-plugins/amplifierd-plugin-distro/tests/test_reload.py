@@ -228,6 +228,47 @@ async def test_reload_calls_registry_update():
 
 
 @pytest.mark.anyio
+async def test_reload_clears_prepared_bundle():
+    """_do_reload sets app.state.prepared_bundle = None so the new prewarm populates it fresh.
+
+    After a reload, the stale PreparedBundle must be cleared so subsequent
+    session creation doesn't accidentally reuse an out-of-date bundle.
+    """
+    app = _make_app()
+    # Simulate a stale prepared_bundle left over from the previous prewarm
+    app.state.prepared_bundle = MagicMock(name="stale_prepared_bundle")
+
+    async def fake_prewarm(a):
+        # Does NOT set prepared_bundle — so it stays None after _do_reload
+        pass
+
+    with (
+        patch(
+            "distro_plugin.reload.DistroPluginSettings",
+            return_value=MagicMock(distro_home="/fake"),
+        ),
+        patch("distro_plugin.reload.overlay_exists", return_value=False),
+        patch("distro_plugin.reload._prewarm", fake_prewarm),
+    ):
+        from distro_plugin.reload import _do_reload
+
+        await _do_reload(app)
+
+    # prepared_bundle must be cleared before the new prewarm starts
+    assert app.state.prepared_bundle is None, (
+        "app.state.prepared_bundle should be cleared to None during reload"
+    )
+
+    # Clean up new task
+    if app.state.prewarm_task and not app.state.prewarm_task.done():
+        app.state.prewarm_task.cancel()
+        try:
+            await app.state.prewarm_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
+@pytest.mark.anyio
 async def test_reload_clears_bundles_ready():
     """_do_reload clears bundles_ready so callers must wait on the new prewarm."""
     app = _make_app()
