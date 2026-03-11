@@ -887,6 +887,31 @@ async function loadAll() {
   state.workStatus = (workData && !workData.error) ? workData : null;
   state.serverStatus = (serverData && !serverData.error) ? serverData : null;
   if (provData && !provData.error && provData.providers) state.providers = provData.providers;
+
+  // Consolidate API key checks from detect data into the system checks list.
+  // Git, GitHub, and CLI are already covered by the preflight endpoint — skip them.
+  if (state.serverStatus) {
+    const checks = (state.serverStatus.checks || []).slice();
+    const existingNames = new Set(checks.map(c => c.name.toLowerCase()));
+    const keyLabels = { anthropic: 'Anthropic API Key', openai: 'OpenAI API Key' };
+    const apiKeys = (state.detect && state.detect.api_keys) || {};
+    Object.entries(apiKeys).forEach(([key, present]) => {
+      const name = keyLabels[key] || (key.charAt(0).toUpperCase() + key.slice(1) + ' API Key');
+      if (!existingNames.has(name.toLowerCase())) {
+        checks.push({
+          name: name,
+          passed: !!present,
+          message: present ? 'Key configured' : 'Key not set in environment',
+          severity: present ? 'ok' : 'warning',
+        });
+      }
+    });
+    state.serverStatus.checks = checks;
+    if (checks.length > 0) {
+      state.serverStatus.passed = checks.every(c => c.passed);
+    }
+  }
+
   state.loaded = true;
   render();
 }
@@ -1047,8 +1072,6 @@ function render() {
     + '<hr class="section-divider">'
     + renderIntegrations()
     + '<hr class="section-divider">'
-    + renderEnvironment(detect)
-    + '<hr class="section-divider">'
     + renderPreflightChecks()
     + renderFooter();
 
@@ -1094,7 +1117,7 @@ function renderPreflightChecks() {
   const summaryIcon = allPassed ? 'OK' : 'WARN';
 
   let html = '<div class="section">'
-    + '<div class="section-title">Preflight Checks</div>'
+    + '<div class="section-title">System Checks</div>'
     + '<div class="preflight-summary">'
     + '<div class="preflight-summary-left">'
     +   '<span class="preflight-status-icon" style="color:' + summaryColor + ';">' + summaryIcon + '</span>'
