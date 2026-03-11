@@ -244,6 +244,22 @@ def create_routes() -> APIRouter:
     # path prefix.
     outer = APIRouter()
 
+    @outer.get("/", include_in_schema=False)
+    async def root_redirect(request: Request) -> RedirectResponse:
+        """Redirect / to the appropriate destination based on setup phase."""
+        # During prewarm, send to /distro/ which serves the loading screen
+        bundles_ready = getattr(request.app.state, "bundles_ready", None)
+        if bundles_ready and not bundles_ready.is_set():
+            return RedirectResponse(url="/distro/")
+
+        try:
+            settings = _get_settings(request)
+            if compute_phase(settings) == "unconfigured":
+                return RedirectResponse(url="/distro/setup")
+        except Exception:
+            pass
+        return RedirectResponse(url="/chat/")
+
     @outer.get("/favicon.svg", include_in_schema=False)
     async def get_favicon() -> FileResponse:
         """Serve the SVG favicon from the bundled static directory."""

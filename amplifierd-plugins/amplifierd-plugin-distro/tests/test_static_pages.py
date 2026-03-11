@@ -143,6 +143,50 @@ def test_wizard_finish_buttons_go_to_distro():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Root redirect (GET /)
+# ---------------------------------------------------------------------------
+
+
+def test_root_redirects_to_chat_when_configured(app, client, settings):
+    """GET / redirects to /chat/ when overlay exists (configured)."""
+    import asyncio
+
+    event = asyncio.Event()
+    event.set()
+    app.state.bundles_ready = event
+
+    overlay_path = settings.distro_home / "bundle" / "bundle.yaml"
+    overlay_path.parent.mkdir(parents=True, exist_ok=True)
+    overlay_path.write_text("bundle: {name: test}\n")
+
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/chat/"
+
+
+def test_root_redirects_to_setup_when_unconfigured(client):
+    """GET / redirects to /distro/setup when no overlay (unconfigured)."""
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 307
+    assert "/distro/setup" in resp.headers["location"]
+
+
+def test_root_redirects_to_distro_during_prewarm(app, client):
+    """GET / redirects to /distro/ during prewarm (which serves loading screen)."""
+    import asyncio
+
+    app.state.bundles_ready = asyncio.Event()  # unset = still loading
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/distro/"
+
+
+# ---------------------------------------------------------------------------
+# Loading screen during bundle prewarm
+# ---------------------------------------------------------------------------
+
+
 def test_dashboard_serves_loading_when_not_ready(app, client):
     """GET /distro/ serves loading.html when bundles_ready event is unset."""
     import asyncio
