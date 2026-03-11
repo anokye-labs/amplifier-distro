@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import platform
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -408,6 +409,92 @@ def create_routes() -> APIRouter:
     @router.get("/preflight")
     async def get_preflight(request: Request) -> dict[str, Any]:
         """Run preflight diagnostic checks and return a report."""
+        settings = _get_settings(request)
+        ds = load_distro_settings(settings)
+        amplifier_home = Path(settings.amplifier_home).expanduser()
+        distro_home = Path(settings.distro_home).expanduser()
+        keys_path = amplifier_home / "keys.env"
+
+        # --- Check functions adapted from original doctor.py ---
+
+        def check_config_exists() -> dict:
+            cfg_path = distro_home / "settings.yaml"
+            if not cfg_path.exists():
+                return {
+                    "name": "Config file",
+                    "passed": False,
+                    "message": f"settings.yaml not found at {cfg_path}",
+                    "severity": "error",
+                }
+            return {
+                "name": "Config file",
+                "passed": True,
+                "message": f"Found at {cfg_path}",
+            }
+
+        def check_identity() -> dict:
+            if ds.identity.github_handle:
+                return {
+                    "name": "Identity",
+                    "passed": True,
+                    "message": f"@{ds.identity.github_handle}",
+                }
+            return {
+                "name": "Identity",
+                "passed": False,
+                "message": "GitHub handle not set",
+                "severity": "error",
+            }
+
+        def check_workspace() -> dict:
+            ws = Path(ds.workspace_root).expanduser()
+            if ws.is_dir():
+                return {"name": "Workspace", "passed": True, "message": str(ws)}
+            return {
+                "name": "Workspace",
+                "passed": False,
+                "message": f"{ws} does not exist",
+                "severity": "error",
+            }
+
+        def check_keys_permissions() -> dict:
+            if not keys_path.exists():
+                return {
+                    "name": "Keys permissions",
+                    "passed": True,
+                    "message": "keys.env not present",
+                }
+            if platform.system() not in ("Linux", "Darwin"):
+                return {
+                    "name": "Keys permissions",
+                    "passed": True,
+                    "message": "Permission check skipped (Windows)",
+                }
+            mode = keys_path.stat().st_mode & 0o777
+            if mode == 0o600:
+                return {
+                    "name": "Keys permissions",
+                    "passed": True,
+                    "message": "keys.env has correct permissions (600)",
+                }
+            return {
+                "name": "Keys permissions",
+                "passed": False,
+                "message": f"keys.env has mode {oct(mode)}, should be 600",
+                "severity": "warning",
+            }
+
+        def check_dir_exists(dir_path: Path, name: str) -> dict:
+            if dir_path.is_dir():
+                return {"name": name, "passed": True, "message": str(dir_path)}
+            return {
+                "name": name,
+                "passed": False,
+                "message": f"{dir_path} does not exist",
+                "severity": "warning",
+            }
+
+        # --- Async checks ---
         git_name, git_email, gh_user = await asyncio.gather(
             _run_command("git", "config", "--global", "user.name"),
             _run_command("git", "config", "--global", "user.email"),
@@ -415,11 +502,23 @@ def create_routes() -> APIRouter:
         )
         amp_cli_path = shutil.which("amplifier")
 
+        # --- Collate checks ---
         raw_checks = [
+            # Config & identity
+            check_config_exists(),
+            check_identity(),
+            check_workspace(),
+            # Directories
+            check_dir_exists(amplifier_home / "memory", "Memory directory"),
+            check_dir_exists(amplifier_home / "cache", "Bundle cache"),
+            check_keys_permissions(),
+            # Tools
             {
                 "name": "Git config",
                 "passed": bool(git_name and git_email),
-                "message": "Configured" if (git_name and git_email) else "Name or email not configured",
+                "message": "Configured"
+                if (git_name and git_email)
+                else "Name or email not configured",
                 "severity": "error" if not (git_name and git_email) else "ok",
             },
             {
@@ -431,12 +530,14 @@ def create_routes() -> APIRouter:
             {
                 "name": "Amplifier CLI",
                 "passed": bool(amp_cli_path),
-                "message": f"Found at {amp_cli_path}" if amp_cli_path else "Not found in PATH",
+                "message": f"Found at {amp_cli_path}"
+                if amp_cli_path
+                else "Not found in PATH",
                 "severity": "error" if not amp_cli_path else "ok",
             },
         ]
 
-        # Format for frontend
+        # --- Format for frontend ---
         checks = []
         for check in raw_checks:
             fe_check = {
@@ -444,11 +545,13 @@ def create_routes() -> APIRouter:
                 "passed": check["passed"],
                 "message": check["message"],
             }
-            if check["severity"] == "warning" and not check["passed"]:
+            if check.get("severity") == "warning" and not check["passed"]:
                 fe_check["severity"] = "warning"
             checks.append(fe_check)
 
-        overall_passed = all(c["passed"] for c in raw_checks if c["severity"] != "warning")
+        overall_passed = all(
+            c.get("severity") != "error" for c in raw_checks if not c["passed"]
+        )
         return {"passed": overall_passed, "checks": checks}
 
     @router.get("/modules")
