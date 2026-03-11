@@ -41,6 +41,7 @@ from distro_plugin.providers import (
     handle_provider_request,
     sync_providers,
 )
+from distro_plugin.reload import request_reload
 
 logger = logging.getLogger(__name__)
 
@@ -346,6 +347,7 @@ def create_routes() -> APIRouter:
         )
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("detail", ""))
+        request_reload(request.app)
         return result
 
     @router.get("/preflight")
@@ -533,14 +535,14 @@ def create_routes() -> APIRouter:
                 dep = FEATURES.get(dep_id)
                 if dep:
                     for inc in dep.includes:
-                        add_include(settings, inc)
+                        add_include(settings, inc, app=request.app)
             for inc in feature.includes:
-                add_include(settings, inc)
+                add_include(settings, inc, app=request.app)
         else:
             # Disable: remove only this feature's includes (dependencies may be
             # shared by other enabled features, so leave them in place).
             for inc in feature.includes:
-                remove_include(settings, inc)
+                remove_include(settings, inc, app=request.app)
 
         return _build_status(settings)
 
@@ -556,7 +558,7 @@ def create_routes() -> APIRouter:
             feat = FEATURES.get(fid)
             if feat:
                 for inc in feat.includes:
-                    add_include(settings, inc)
+                    add_include(settings, inc, app=request.app)
         return {"status": "ok", "tier": body.tier, "features_enabled": feature_ids}
 
     # ------------------------------------------------------------------
@@ -594,12 +596,12 @@ def create_routes() -> APIRouter:
                     dep = FEATURES.get(dep_id)
                     if dep:
                         for inc in dep.includes:
-                            add_include(settings, inc)
+                            add_include(settings, inc, app=request.app)
                 for inc in feat.includes:
-                    add_include(settings, inc)
+                    add_include(settings, inc, app=request.app)
             else:
                 for inc in feat.includes:
-                    remove_include(settings, inc)
+                    remove_include(settings, inc, app=request.app)
         return {"status": "ok"}
 
     @router.post("/setup/steps/interfaces")
@@ -629,9 +631,12 @@ def create_routes() -> APIRouter:
             )
             if result.get("status") == "error":
                 raise HTTPException(status_code=400, detail=result.get("detail", ""))
+            request_reload(request.app)
             return result
         # Sync mode: auto-register providers from environment keys
         results = sync_providers(settings)
+        if results:
+            request_reload(request.app)
         return {"status": "ok", "synced": len(results)}
 
     @router.post("/setup/steps/verify")
