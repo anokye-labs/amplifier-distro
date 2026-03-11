@@ -405,6 +405,52 @@ def create_routes() -> APIRouter:
             raise HTTPException(status_code=400, detail=result.get("detail", ""))
         return result
 
+    @router.get("/preflight")
+    async def get_preflight(request: Request) -> dict[str, Any]:
+        """Run preflight diagnostic checks and return a report."""
+        git_name, git_email, gh_user = await asyncio.gather(
+            _run_command("git", "config", "--global", "user.name"),
+            _run_command("git", "config", "--global", "user.email"),
+            _run_command("gh", "api", "user", "-q", ".login"),
+        )
+        amp_cli_path = shutil.which("amplifier")
+
+        raw_checks = [
+            {
+                "name": "Git config",
+                "passed": bool(git_name and git_email),
+                "message": "Configured" if (git_name and git_email) else "Name or email not configured",
+                "severity": "error" if not (git_name and git_email) else "ok",
+            },
+            {
+                "name": "GitHub CLI",
+                "passed": bool(gh_user),
+                "message": "Authenticated" if gh_user else "Not authenticated",
+                "severity": "warning",
+            },
+            {
+                "name": "Amplifier CLI",
+                "passed": bool(amp_cli_path),
+                "message": f"Found at {amp_cli_path}" if amp_cli_path else "Not found in PATH",
+                "severity": "error" if not amp_cli_path else "ok",
+            },
+        ]
+
+        # Format for frontend
+        checks = []
+        for check in raw_checks:
+            fe_check = {
+                "name": check["name"],
+                "passed": check["passed"],
+                "message": check["message"],
+            }
+            if check["severity"] == "warning" and not check["passed"]:
+                fe_check["severity"] = "warning"
+            checks.append(fe_check)
+
+        overall_passed = all(c["passed"] for c in raw_checks if c["severity"] != "warning")
+        return {"passed": overall_passed, "checks": checks}
+
     @router.get("/modules")
     async def get_modules(request: Request) -> dict[str, Any]:
         """Return the feature catalog with enabled status for each feature."""
