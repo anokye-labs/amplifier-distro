@@ -55,7 +55,7 @@ SERVER_DIR = "server"  # relative to AMPLIFIER_HOME
 SERVER_SOCKET = "server.sock"
 SERVER_PID_FILE = "server.pid"
 SERVER_LOG_FILE = "server.log"
-SERVER_DEFAULT_PORT = 8400
+SERVER_DEFAULT_PORT = 8410
 SLACK_SESSIONS_FILENAME = "slack-sessions.json"
 TEAMS_SESSIONS_FILENAME = "teams-sessions.json"
 

@@ -20,7 +20,7 @@ Then start the server:
 amp-distro serve
 ```
 
-Open [http://localhost:8400](http://localhost:8400) to begin.
+Open [http://localhost:8410](http://localhost:8410) to begin.
 
 ## Experience Apps
 
@@ -69,7 +69,7 @@ uv tool install -e .
 ### `amp-distro serve` — Start the experience server
 
 ```bash
-amp-distro serve                 # Foreground on http://localhost:8400
+amp-distro serve                 # Foreground on http://localhost:8410
 amp-distro serve --reload        # Auto-reload for development
 ```
 

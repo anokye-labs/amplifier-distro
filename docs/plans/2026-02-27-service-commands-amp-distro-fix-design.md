@@ -50,7 +50,7 @@ Two changes in `_restart_server()`:
 
 ### 5. `scripts/amplifier-distro.service`
 
-- Update static template: `ExecStart=amp-distro serve --host 127.0.0.1 --port 8400`.
+- Update static template: `ExecStart=amp-distro serve --host 127.0.0.1 --port 8410`.
 
 ## Data Flow
 

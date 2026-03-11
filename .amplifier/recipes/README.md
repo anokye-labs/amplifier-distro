@@ -50,7 +50,7 @@ CWD, and default CWD from `settings.yaml`.
 
 ```bash
 # 1. Server must be running
-amp-distro-server start --port 8400
+amp-distro-server start --port 8410
 
 # 2. agent-browser must be installed
 npm install -g agent-browser && agent-browser install

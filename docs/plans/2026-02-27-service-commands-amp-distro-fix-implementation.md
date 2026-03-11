@@ -431,7 +431,7 @@ class TestStaleUnitDetection:
         unit_file.write_text(
             "[Service]\n"
             "ExecStart=/home/user/.local/bin/amp-distro-server"
-            " --host 127.0.0.1 --port 8400\n"
+            " --host 127.0.0.1 --port 8410\n"
         )
 
         from amplifier_distro.service import _status_systemd
@@ -487,7 +487,7 @@ class TestStaleUnitDetection:
         unit_file.write_text(
             "[Service]\n"
             "ExecStart=/home/user/.local/bin/amp-distro serve"
-            " --host 127.0.0.1 --port 8400\n"
+            " --host 127.0.0.1 --port 8410\n"
         )
 
         from amplifier_distro.service import _status_systemd
@@ -1217,7 +1217,7 @@ class TestRestartServerSupervisorDetection:
 
         with patch.dict(os.environ, {"INVOCATION_ID": "abc123"}, clear=True):
             with pytest.raises(SystemExit) as exc_info:
-                _restart_server("127.0.0.1", 8400, None, False)
+                _restart_server("127.0.0.1", 8410, None, False)
 
         assert exc_info.value.code == 1
         mock_stop.assert_called_once()
@@ -1237,7 +1237,7 @@ class TestRestartServerSupervisorDetection:
             os.environ, {"LAUNCHD_JOB_NAME": "com.amplifier.distro"}, clear=True
         ):
             with pytest.raises(SystemExit) as exc_info:
-                _restart_server("127.0.0.1", 8400, None, False)
+                _restart_server("127.0.0.1", 8410, None, False)
 
         assert exc_info.value.code == 1
         mock_stop.assert_called_once()
@@ -1256,10 +1256,10 @@ class TestRestartServerSupervisorDetection:
         from amplifier_distro.server.watchdog import _restart_server
 
         with patch.dict(os.environ, {}, clear=True):
-            _restart_server("127.0.0.1", 8400, None, False)
+            _restart_server("127.0.0.1", 8410, None, False)
 
         mock_daemonize.assert_called_once_with(
-            host="127.0.0.1", port=8400, apps_dir=None, dev=False
+            host="127.0.0.1", port=8410, apps_dir=None, dev=False
         )
 
     @patch("amplifier_distro.server.watchdog.logger")
@@ -1278,7 +1278,7 @@ class TestRestartServerSupervisorDetection:
 
         with patch.dict(os.environ, {}, clear=True):
             # Must NOT raise — the function should catch RuntimeError and return
-            _restart_server("127.0.0.1", 8400, None, False)
+            _restart_server("127.0.0.1", 8410, None, False)
 
         mock_logger.warning.assert_called_once()
 ```
@@ -1421,14 +1421,14 @@ git commit -m "fix: add supervisor detection and RuntimeError handling to _resta
 
 Open `distro-server/scripts/amplifier-distro.service`. Line 7 currently reads:
 ```
-ExecStart=amp-distro-server --host 127.0.0.1 --port 8400
+ExecStart=amp-distro-server --host 127.0.0.1 --port 8410
 ```
 
 **Step 2: Update ExecStart**
 
 Change line 7 to:
 ```
-ExecStart=amp-distro serve --host 127.0.0.1 --port 8400
+ExecStart=amp-distro serve --host 127.0.0.1 --port 8410
 ```
 
 The full file after the change:
@@ -1439,7 +1439,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=amp-distro serve --host 127.0.0.1 --port 8400
+ExecStart=amp-distro serve --host 127.0.0.1 --port 8410
 Restart=on-failure
 RestartSec=5
 StartLimitBurst=5

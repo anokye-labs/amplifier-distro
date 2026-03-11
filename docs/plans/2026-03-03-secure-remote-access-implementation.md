@@ -340,11 +340,11 @@ class TestIsOriginAllowed:
 
     def test_localhost_origin_is_allowed(self):
         allowed = {"localhost", "127.0.0.1"}
-        assert is_origin_allowed("http://localhost:8400", allowed) is True
+        assert is_origin_allowed("http://localhost:8410", allowed) is True
 
     def test_127_origin_is_allowed(self):
         allowed = {"localhost", "127.0.0.1"}
-        assert is_origin_allowed("http://127.0.0.1:8400", allowed) is True
+        assert is_origin_allowed("http://127.0.0.1:8410", allowed) is True
 
     def test_tailscale_origin_is_allowed(self):
         allowed = {"localhost", "127.0.0.1", "mybox.tail1234.ts.net"}
@@ -445,7 +445,7 @@ def is_origin_allowed(origin: str | None, allowed: set[str]) -> bool:
         return True  # No origin header = allow (same as current behavior)
 
     # Check if any allowed entry appears in the origin string.
-    # This handles "http://localhost:8400" matching "localhost",
+    # This handles "http://localhost:8410" matching "localhost",
     # "https://mybox.ts.net" matching "mybox.ts.net", etc.
     return any(entry in origin for entry in allowed)
 ```
@@ -1328,7 +1328,7 @@ class TestTlsStartupWiring:
 
             from amplifier_distro.server.cli import _run_foreground
 
-            _run_foreground("0.0.0.0", 8400, None, False, False, stub=False, tls_mode="auto")
+            _run_foreground("0.0.0.0", 8410, None, False, False, stub=False, tls_mode="auto")
 
             call_kwargs = mock_uvicorn.run.call_args[1]
             assert call_kwargs.get("ssl_certfile") == str(fake_cert)
@@ -1355,7 +1355,7 @@ class TestTlsStartupWiring:
 
             from amplifier_distro.server.cli import _run_foreground
 
-            _run_foreground("0.0.0.0", 8400, None, False, False, stub=False, tls_mode="off")
+            _run_foreground("0.0.0.0", 8410, None, False, False, stub=False, tls_mode="off")
 
             call_kwargs = mock_uvicorn.run.call_args[1]
             assert "ssl_certfile" not in call_kwargs

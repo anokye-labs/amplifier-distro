@@ -331,7 +331,7 @@ def service_group() -> None:
     "--port",
     default=None,
     type=int,
-    help="Bind port (default: 8400).",
+    help="Bind port (default: 8410).",
 )
 def service_install(no_watchdog: bool, host: str, port: int | None) -> None:
     """Install the platform service for auto-start on boot."""

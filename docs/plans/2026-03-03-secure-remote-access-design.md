@@ -6,7 +6,7 @@ Address GitHub issue #68: voice app fails on remote access because `getUserMedia
 
 ## Background
 
-amplifier-distro is a FastAPI/Python web server hosting multiple AI front-end apps (Chat, Voice, Slack, Routines, Settings). The server binds to `0.0.0.0:8400` by default, making remote access common.
+amplifier-distro is a FastAPI/Python web server hosting multiple AI front-end apps (Chat, Voice, Slack, Routines, Settings). The server binds to `0.0.0.0:8410` by default, making remote access common.
 
 The voice app requires `navigator.mediaDevices.getUserMedia`, which browsers restrict to secure contexts (HTTPS or localhost). When a user accesses the server remotely over plain HTTP, `navigator.mediaDevices` is `undefined`, producing a cryptic TypeError with no guidance on what went wrong.
 
@@ -76,7 +76,7 @@ The server gains the ability to serve HTTPS directly via uvicorn's ssl support.
 - Tailscale certs re-provisioned on startup if expired or near expiry
 - Self-signed certs generated once and reused (browser trust click-through happens once)
 - Existing `tailscale.py` reverse proxy mode remains as an alternative path
-- Default port (8400) and bind address (0.0.0.0) unchanged
+- Default port (8410) and bind address (0.0.0.0) unchanged
 
 ### Layer 3: PAM Authentication
 
@@ -91,7 +91,7 @@ The server gains the ability to serve HTTPS directly via uvicorn's ssl support.
 6. Logout deletes the cookie client-side
 
 **Key decisions:**
-- **Localhost bypasses auth entirely** — `http://localhost:8400` needs no login, same as today
+- **Localhost bypasses auth entirely** — `http://localhost:8410` needs no login, same as today
 - **Session timeout:** configurable, 30 days default (personal device, stay logged in)
 - **Secret key:** auto-generated on first run, stored in `~/.amplifier-distro/`
 - **Shadow group requirement:** documented clearly; `amp-distro doctor` checks for it and tells the user how to fix it
