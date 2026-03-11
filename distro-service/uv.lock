@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -20,7 +20,7 @@ dependencies = [
 requires-dist = [
     { name = "amplifierd", git = "https://github.com/microsoft/amplifierd?branch=main" },
     { name = "amplifierd-plugin-auth", editable = "../amplifierd-plugins/amplifierd-plugin-auth" },
-    { name = "amplifierd-plugin-chat", git = "https://github.com/payneio/amplifierd-plugin-chat?rev=main" },
+    { name = "amplifierd-plugin-chat", git = "https://github.com/microsoft/amplifierd-plugin-chat?rev=main" },
     { name = "amplifierd-plugin-distro", editable = "../amplifierd-plugins/amplifierd-plugin-distro" },
     { name = "amplifierd-plugin-slack", editable = "../amplifierd-plugins/amplifierd-plugin-slack" },
     { name = "amplifierd-plugin-voice", git = "https://github.com/microsoft/amplifier-voice?rev=main" },
@@ -108,7 +108,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "amplifierd-plugin-chat"
 version = "0.1.0"
-source = { git = "https://github.com/payneio/amplifierd-plugin-chat?rev=main#6c09883f1dbccbb0dc5c222df9282c13c8e233ee" }
+source = { git = "https://github.com/microsoft/amplifierd-plugin-chat?rev=main#9ccfedc0e3cc41d18070bd6862cf768b7510f6d8" }
 dependencies = [
     { name = "fastapi" },
     { name = "pydantic" },

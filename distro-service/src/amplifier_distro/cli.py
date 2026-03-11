@@ -91,7 +91,7 @@ def main(
             no_auth=no_auth,
             reload=reload,
             log_level=log_level,
-            home_redirect=None,  # No distro dashboard in localhost mode
+            home_redirect="/distro/",
         )
 
 
