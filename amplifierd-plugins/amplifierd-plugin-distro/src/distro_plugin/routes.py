@@ -109,20 +109,10 @@ class BridgeDefinition:
 
 
 BRIDGE_DEFINITIONS: dict[str, BridgeDefinition] = {
-    "slack": BridgeDefinition(
-        name="Slack",
-        description="Real-time Slack integration",
-        env_key="SLACK_BOT_TOKEN",
-    ),
     "discord": BridgeDefinition(
         name="Discord",
         description="Discord bot integration",
         env_key="DISCORD_BOT_TOKEN",
-    ),
-    "voice": BridgeDefinition(
-        name="Voice",
-        description="Voice interface via OpenAI Realtime API",
-        env_key="OPENAI_API_KEY",
     ),
 }
 
