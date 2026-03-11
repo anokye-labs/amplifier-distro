@@ -98,7 +98,9 @@ async def _do_reload(app: Any) -> None:
     if bundles_ready:
         bundles_ready.clear()
     app.state.prewarm_error = None
-    app.state.prepared_bundle = None
+    session_manager = getattr(app.state, "session_manager", None)
+    if session_manager and hasattr(session_manager, "clear_prepared_bundle"):
+        session_manager.clear_prepared_bundle()
 
     # 5. Start new prewarm task — uses module-level _prewarm (patchable in tests)
     if _prewarm is None:  # pragma: no cover

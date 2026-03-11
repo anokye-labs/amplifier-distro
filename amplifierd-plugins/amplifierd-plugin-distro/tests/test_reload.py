@@ -229,17 +229,17 @@ async def test_reload_calls_registry_update():
 
 @pytest.mark.anyio
 async def test_reload_clears_prepared_bundle():
-    """_do_reload sets app.state.prepared_bundle = None so the new prewarm populates it fresh.
+    """_do_reload calls session_manager.clear_prepared_bundle() so stale bundles are removed.
 
     After a reload, the stale PreparedBundle must be cleared so subsequent
     session creation doesn't accidentally reuse an out-of-date bundle.
     """
     app = _make_app()
-    # Simulate a stale prepared_bundle left over from the previous prewarm
-    app.state.prepared_bundle = MagicMock(name="stale_prepared_bundle")
+    # Simulate a session_manager with a stale prepared bundle
+    mock_session_manager = MagicMock()
+    app.state.session_manager = mock_session_manager
 
     async def fake_prewarm(a):
-        # Does NOT set prepared_bundle — so it stays None after _do_reload
         pass
 
     with (
@@ -254,10 +254,8 @@ async def test_reload_clears_prepared_bundle():
 
         await _do_reload(app)
 
-    # prepared_bundle must be cleared before the new prewarm starts
-    assert app.state.prepared_bundle is None, (
-        "app.state.prepared_bundle should be cleared to None during reload"
-    )
+    # session_manager.clear_prepared_bundle() must have been called
+    mock_session_manager.clear_prepared_bundle.assert_called_once_with()
 
     # Clean up new task
     if app.state.prewarm_task and not app.state.prewarm_task.done():
