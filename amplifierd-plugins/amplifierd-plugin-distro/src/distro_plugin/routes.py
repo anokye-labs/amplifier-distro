@@ -686,6 +686,19 @@ def create_routes() -> APIRouter:
     @router.get("/", response_model=None)
     async def get_dashboard(request: Request) -> HTMLResponse | RedirectResponse:
         """Serve the dashboard landing page, or redirect to setup if unconfigured."""
+        # Serve loading screen while bundle prewarm is in progress
+        bundles_ready = getattr(request.app.state, "bundles_ready", None)
+        if bundles_ready and not bundles_ready.is_set():
+            loading_path = _STATIC_DIR / "loading.html"
+            try:
+                return HTMLResponse(content=loading_path.read_text())
+            except OSError:
+                return HTMLResponse(
+                    content="<h1>Starting up&hellip;</h1><p>Preparing your environment.</p>",
+                    status_code=503,
+                    headers={"Retry-After": "5"},
+                )
+
         settings = _get_settings(request)
         if compute_phase(settings) == "unconfigured":
             return RedirectResponse(url="/distro/setup")
