@@ -5,11 +5,11 @@ version = "0.1.0"
 description = "Amplifier distro — amplifierd + distro plugin"
 requires-python = ">=3.12"
 dependencies = [
-    "amplifierd @ git+https://github.com/microsoft/amplifierd@main",
-    "amplifierd-plugin-distro @ git+https://github.com/microsoft/amplifierd@main#subdirectory=amplifierd-plugins/distro",
-    "amplifierd-plugin-chat @ git+https://github.com/microsoft/amplifierd-plugin-chat@main",
-    "amplifierd-plugin-slack @ git+https://github.com/microsoft/amplifierd@main#subdirectory=amplifierd-plugins/slack",
-    "amplifierd-plugin-voice @ git+https://github.com/microsoft/amplifier-voice@main",
+    "amplifierd",
+    "amplifierd-plugin-distro",
+    "amplifier-chat",
+    "amplifierd-plugin-slack",
+    "amplifierd-plugin-voice",
     "amplifierd-plugin-auth",
     "click>=8.1.0",
 ]
@@ -17,17 +17,17 @@ dependencies = [
 [project.scripts]
 amp-distro = "amplifier_distro.cli:main"
 
-# Local dev overrides: use sibling checkouts instead of git URLs
+# Sibling plugins use workspace resolution for local dev.
+# External deps need explicit git sources here so distro-service is
+# self-contained — the workspace root also declares these, but we can't
+# rely on workspace discovery in all install contexts.
 [tool.uv.sources]
 amplifierd = { git = "https://github.com/microsoft/amplifierd", branch = "main" }
-amplifierd-plugin-distro = { path = "../amplifierd-plugins/amplifierd-plugin-distro", editable = true }
-amplifierd-plugin-slack = { path = "../amplifierd-plugins/amplifierd-plugin-slack", editable = true }
-# amplifierd-plugin-voice — now a proper remote dep, no local override needed
-amplifierd-plugin-auth = { path = "../amplifierd-plugins/amplifierd-plugin-auth", editable = true }
-# amplifierd-plugin-chat = { path = "../../amplifierd-plugin-chat", editable = true }
-
-[tool.hatch.metadata]
-allow-direct-references = true
+amplifier-chat = { git = "https://github.com/microsoft/amplifier-chat", branch = "main" }
+amplifierd-plugin-voice = { git = "https://github.com/microsoft/amplifier-voice", branch = "main" }
+amplifierd-plugin-distro = { workspace = true }
+amplifierd-plugin-slack = { workspace = true }
+amplifierd-plugin-auth = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amplifier_distro"]

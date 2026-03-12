@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    if: github.repository == 'microsoft/amplifier-distro'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Lint distro-service
+        working-directory: distro-service
+        run: uvx ruff check src/
+
+      - name: Format check distro-service
+        working-directory: distro-service
+        run: uvx ruff format --check src/
+
+      - name: Lint plugins
+        run: |
+          uvx ruff check amplifierd-plugins/amplifierd-plugin-distro/src/
+          uvx ruff check amplifierd-plugins/amplifierd-plugin-auth/src/
+          uvx ruff check amplifierd-plugins/amplifierd-plugin-slack/src/
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    if: github.repository == 'microsoft/amplifier-distro'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: distro-service
+        run: uv sync --frozen
+
+      - name: Type check
+        working-directory: distro-service
+        run: uvx pyright src/
+
+  service:
+    name: Service Boot
+    runs-on: ubuntu-latest
+    if: github.repository == 'microsoft/amplifier-distro'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: distro-service
+        run: uv sync --frozen
+
+      - name: CLI loads
+        working-directory: distro-service
+        run: uv run amp-distro --help
+
+      - name: Service starts and responds
+        working-directory: distro-service
+        run: |
+          uv run amp-distro --port 18410 --tls off --no-auth &
+          SERVER_PID=$!
+
+          # Poll until healthy (max 30 seconds)
+          HEALTHY=false
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:18410/health > /dev/null 2>&1; then
+              HEALTHY=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$HEALTHY" != "true" ]; then
+            echo "::error::Server failed to start within 30 seconds"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== /health ==="
+          curl -sf http://127.0.0.1:18410/health
+          echo ""
+
+          echo "=== /ready ==="
+          curl -sf http://127.0.0.1:18410/ready
+          echo ""
+
+          kill $SERVER_PID
+
+  plugin-tests:
+    name: Plugin Tests
+    runs-on: ubuntu-latest
+    if: github.repository == 'microsoft/amplifier-distro'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: amplifierd-plugins/amplifierd-plugin-distro
+        run: uv sync --frozen
+
+      - name: Run tests
+        working-directory: amplifierd-plugins/amplifierd-plugin-distro
+        run: uv run pytest tests/ -v

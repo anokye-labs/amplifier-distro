@@ -1,0 +1,20 @@
+[project]
+name = "amplifier-distro-workspace"
+version = "0.0.0"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = [
+    "distro-service",
+    "amplifierd-plugins/amplifierd-plugin-auth",
+    "amplifierd-plugins/amplifierd-plugin-distro",
+    "amplifierd-plugins/amplifierd-plugin-slack",
+]
+
+# Workspace-level source defaults — apply to all members.
+# External deps that aren't workspace members need git sources here
+# so they resolve for any member that declares them.
+[tool.uv.sources]
+amplifierd = { git = "https://github.com/microsoft/amplifierd", branch = "main" }
+amplifier-chat = { git = "https://github.com/microsoft/amplifier-chat", branch = "main" }
+amplifierd-plugin-voice = { git = "https://github.com/microsoft/amplifier-voice", branch = "main" }
