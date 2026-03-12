@@ -30,9 +30,10 @@ requires-dist = [
 [[package]]
 name = "amplifier-chat"
 version = "0.1.0"
-source = { git = "https://github.com/microsoft/amplifier-chat?rev=main#1e8121ef893b19f86d8a81a6380657a9fccb2337" }
+source = { git = "https://github.com/microsoft/amplifier-chat?rev=main#19415d6dbcf9581ee17228f05ebaae35d99b45ac" }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
