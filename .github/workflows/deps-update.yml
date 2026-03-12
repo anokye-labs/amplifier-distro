@@ -1,0 +1,108 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    - cron: "0 14 * * *" # Daily 6am PT (14:00 UTC)
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update:
+    name: Update & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # -- Update lockfiles --------------------------------------------------
+
+      - name: Update distro-service lockfile
+        working-directory: distro-service
+        run: uv lock --upgrade
+
+      - name: Update plugin-distro lockfile
+        working-directory: amplifierd-plugins/amplifierd-plugin-distro
+        run: uv lock --upgrade
+
+      # -- Validate distro-service -------------------------------------------
+
+      - name: Install distro-service
+        working-directory: distro-service
+        run: uv sync --frozen
+
+      - name: Lint
+        working-directory: distro-service
+        run: |
+          uvx ruff check src/
+          uvx ruff format --check src/
+
+      - name: CLI loads
+        working-directory: distro-service
+        run: uv run amp-distro --help
+
+      - name: Service starts and responds
+        working-directory: distro-service
+        run: |
+          uv run amp-distro --port 18410 --tls off --no-auth &
+          SERVER_PID=$!
+
+          HEALTHY=false
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:18410/health > /dev/null 2>&1; then
+              HEALTHY=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$HEALTHY" != "true" ]; then
+            echo "::error::Server failed to start within 30 seconds"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          curl -sf http://127.0.0.1:18410/health
+          echo ""
+          curl -sf http://127.0.0.1:18410/ready
+          echo ""
+          kill $SERVER_PID
+
+      # -- Validate plugins --------------------------------------------------
+
+      - name: Install plugin-distro
+        working-directory: amplifierd-plugins/amplifierd-plugin-distro
+        run: uv sync --frozen
+
+      - name: Run plugin tests
+        working-directory: amplifierd-plugins/amplifierd-plugin-distro
+        run: uv run pytest tests/ -v
+
+      # -- Create PR if everything passed ------------------------------------
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # NOTE: PRs created with GITHUB_TOKEN won't trigger CI workflows.
+          # Replace with a PAT or GitHub App token for full automation.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: upgrade dependencies"
+          title: "chore: weekly dependency update"
+          body: |
+            Automated weekly dependency update.
+
+            **What changed:**
+            - Re-resolved all `@main` git dependencies to latest commits
+            - All CI checks passed against upgraded dependencies
+
+            **Updated lockfiles:**
+            - `distro-service/uv.lock`
+            - `amplifierd-plugins/amplifierd-plugin-distro/uv.lock`
+
+            > This PR is auto-updated weekly. If a previous PR is still open,
+            > it has been force-updated with the latest dependency versions.
+          branch: auto/dependency-updates
+          labels: dependencies, automated
