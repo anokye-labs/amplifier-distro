@@ -388,8 +388,7 @@ stages:
           skipped_findings=$(jq -nc \
             --argjson has "$has_finding" \
             --argjson sel "$selected" \
-            '[$has[] | select(.issue_number as $n |\
-              [$sel[].issue_number] | index($n) | not)]')
+            '[$has[] | select(.issue_number as $n | [$sel[].issue_number] | index($n) | not)]')
 
           # Split selected issues into batches
           batch_size={{batch_size}}
