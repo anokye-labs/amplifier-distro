@@ -987,11 +987,11 @@ async function saveConfig(field) {
   let body = {};
 
   if (field === 'workspace_root') {
-    body = { workspace_root: value };
+    body = { values: { workspace_root: value } };
   } else if (field === 'github_handle') {
-    body = { identity: { github_handle: value } };
+    body = { section: 'identity', values: { github_handle: value } };
   } else if (field === 'git_email') {
-    body = { identity: { git_email: value } };
+    body = { section: 'identity', values: { git_email: value } };
   }
 
   const btn = document.getElementById('btn-save-' + field);
@@ -1000,7 +1000,15 @@ async function saveConfig(field) {
   const res = await api('POST', '/distro-settings', body);
 
   if (res && !res.error) {
-    state.config = (res.settings) ? res.settings : res;
+    if (field === 'workspace_root') {
+      state.config.workspace_root = value;
+    } else if (field === 'github_handle') {
+      if (!state.config.identity) state.config.identity = {};
+      state.config.identity.github_handle = value;
+    } else if (field === 'git_email') {
+      if (!state.config.identity) state.config.identity = {};
+      state.config.identity.git_email = value;
+    }
     showToast('Saved', 'success');
   } else {
     showToast('Failed to save', 'error');
